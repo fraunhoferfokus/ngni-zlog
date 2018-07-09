@@ -23,6 +23,20 @@
 #include "level_list.h"
 #include "zc_defs.h"
 
+	#define ANSI_GRAY		        "\033[01;30m"
+	#define ANSI_GREEN_FAINT        "\033[06;32m"
+	#define ANSI_BLINK_RED          "\033[01;05;31m"
+	#define ANSI_RED                "\033[01;31m"
+	#define ANSI_GREEN              "\033[01;32m"
+	#define ANSI_YELLOW             "\033[01;33m"
+	#define ANSI_BLUE               "\033[01;34m"
+	#define ANSI_BLUE_FAINT         "\033[06;34m"
+	#define ANSI_MAGENTA            "\033[06;35m"
+	#define ANSI_CYAN               "\033[01;36m"
+	#define ANSI_WHITE              "\033[01;37m"
+	#define ANSI_RESET              "\033[00m"
+
+
 
 #define ZLOG_DEFAULT_TIME_FMT "%F %T"
 #define	ZLOG_HEX_HEAD  \
@@ -239,16 +253,46 @@ static int zlog_spec_write_level_uppercase(zlog_spec_t * a_spec, zlog_thread_t *
 	zlog_level_t *a_level;
 
 	a_level = zlog_level_list_get(zlog_env_conf->levels, a_thread->event->level);
+
 	return zlog_buf_append(a_buf, a_level->str_uppercase, a_level->str_len);
+
+}
+
+static int zlog_spec_write_color(zlog_spec_t * a_spec, zlog_thread_t * a_thread, zlog_buf_t * a_buf)
+{
+	zlog_level_t *a_level;
+
+	a_level = zlog_level_list_get(zlog_env_conf->levels, a_thread->event->level);
+
+	if(strcmp(a_level->str_uppercase,"DEBUG") == 0)
+		return zlog_buf_append(a_buf, ANSI_GREEN_FAINT, sizeof(ANSI_GREEN_FAINT) - 1);
+	else if(strcmp(a_level->str_uppercase,"INFO") == 0)
+		return zlog_buf_append(a_buf, ANSI_GREEN, sizeof(ANSI_GREEN) - 1);
+	else if(strcmp(a_level->str_uppercase,"NOTICE") == 0)
+			return zlog_buf_append(a_buf, ANSI_CYAN, sizeof(ANSI_CYAN) - 1);
+	else if(strcmp(a_level->str_uppercase,"WARN") == 0)
+			return zlog_buf_append(a_buf, ANSI_BLUE, sizeof(ANSI_BLUE) - 1);
+	else if(strcmp(a_level->str_uppercase,"ERROR") == 0)
+			return zlog_buf_append(a_buf, ANSI_YELLOW, sizeof(ANSI_YELLOW) - 1);
+	else if(strcmp(a_level->str_uppercase,"ALERT") == 0)
+			return zlog_buf_append(a_buf, ANSI_RED, sizeof(ANSI_RED) - 1);
+	else
+		return zlog_buf_append(a_buf, ANSI_RESET, sizeof(ANSI_RESET) - 1);
+}
+
+static int zlog_spec_write_removecolor(zlog_spec_t * a_spec, zlog_thread_t * a_thread, zlog_buf_t * a_buf)
+{
+	return zlog_buf_append(a_buf, "\x1b[0m", sizeof("\x1b[0m") - 1);
 }
 
 static int zlog_spec_write_usrmsg(zlog_spec_t * a_spec, zlog_thread_t * a_thread, zlog_buf_t * a_buf)
 {
 	if (a_thread->event->generate_cmd == ZLOG_FMT) {
 		if (a_thread->event->str_format) {
-			return zlog_buf_vprintf(a_buf,
+			zlog_buf_vprintf(a_buf,
 				      a_thread->event->str_format,
 				      a_thread->event->str_args);
+			 return zlog_buf_append(a_buf, "\x1b[0m", sizeof("\x1b[0m") - 1);;
 		} else {
 			return zlog_buf_append(a_buf, "format=(null)", sizeof("format=(null)")-1);
 		}
@@ -274,8 +318,8 @@ static int zlog_spec_write_usrmsg(zlog_spec_t * a_spec, zlog_thread_t * a_thread
 		while (1) {
 			unsigned char c;
 
-			rc = zlog_buf_append(a_buf, "\n", 1);
-			if (rc)  goto zlog_hex_exit;
+			//rc = zlog_buf_append(a_buf, "\n", 1);
+			//if (rc)  goto zlog_hex_exit;
 
 			rc = zlog_buf_printf_dec64(a_buf, line_offset + 1, 10);
 			if (rc)  goto zlog_hex_exit;
@@ -337,6 +381,7 @@ static int zlog_spec_write_usrmsg(zlog_spec_t * a_spec, zlog_thread_t * a_thread
 
 	return 0;
 }
+
 
 /*******************************************************************************/
 /* implementation of gen function */
@@ -522,6 +567,7 @@ zlog_spec_t *zlog_spec_new(char *pattern_start, char **pattern_next, int *time_c
 
 			a_spec->time_cache_index = *time_cache_count;
 			(*time_cache_count)++;
+			a_spec->write_buf = zlog_spec_write_removecolor;
 			a_spec->write_buf = zlog_spec_write_time;
 
 			*pattern_next = p;
@@ -615,6 +661,9 @@ zlog_spec_t *zlog_spec_new(char *pattern_start, char **pattern_next, int *time_c
 			break;
 		case '%':
 			a_spec->write_buf = zlog_spec_write_percent;
+			break;
+		case 'x':
+			a_spec->write_buf = zlog_spec_write_color;
 			break;
 		default:
 			zc_error("str[%s] in wrong format, p[%c]", a_spec->str, *p);
