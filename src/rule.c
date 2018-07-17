@@ -30,6 +30,10 @@
 
 #include "zc_defs.h"
 
+extern ring_buf_t* ring_buffer;
+extern int connections_no;
+extern int connections[20];
+extern phoenix_mem_t *zlog_mem_pool;
 
 void zlog_rule_profile(zlog_rule_t * a_rule, int flag)
 {
@@ -440,7 +444,7 @@ static int zlog_rule_output_dynamic_record(zlog_rule_t * a_rule, zlog_thread_t *
 	return 0;
 }
 
-static int zlog_rule_output_stdout(zlog_rule_t * a_rule,
+static int zlog_rule_output_stderr(zlog_rule_t * a_rule,
 				   zlog_thread_t * a_thread)
 {
 
@@ -457,8 +461,7 @@ static int zlog_rule_output_stdout(zlog_rule_t * a_rule,
 
 	return 0;
 }
-
-static int zlog_rule_output_stderr(zlog_rule_t * a_rule,
+static int zlog_rule_output_stdout(zlog_rule_t * a_rule,
 				   zlog_thread_t * a_thread)
 {
 
@@ -467,14 +470,51 @@ static int zlog_rule_output_stderr(zlog_rule_t * a_rule,
 		return -1;
 	}
 
-	if (write(STDERR_FILENO,
-		zlog_buf_str(a_thread->msg_buf), zlog_buf_len(a_thread->msg_buf)) < 0) {
+//	ring_buf_add(ring_buffer, zlog_buf_str(a_thread->msg_buf),zlog_buf_len(a_thread->msg_buf), zlog_mem_pool);
+
+
+
+	if (write(STDOUT_FILENO,
+			zlog_buf_str(a_thread->msg_buf),zlog_buf_len(a_thread->msg_buf)) < 0) {
 		zc_error("write fail, errno[%d]", errno);
 		return -1;
 	}
+/*
+	if (write(STDOUT_FILENO,
+		zlog_buf_str(a_thread->msg_buf), zlog_buf_len(a_thread->msg_buf)) < 0) {
+		zc_error("write fail, errno[%d]", errno);
+		return -1;
+	}*/
 
 	return 0;
 }
+
+static int zlog_rule_output_tcpout(zlog_rule_t * a_rule,
+				   zlog_thread_t * a_thread)
+{
+
+	if (zlog_format_gen_msg(a_rule->format, a_thread)) {
+		zc_error("zlog_format_gen_msg fail");
+		return -1;
+	}
+	ph_str msg = { zlog_buf_str(a_thread->msg_buf), zlog_buf_len(a_thread->msg_buf) };
+
+
+	for(int i=0 ; i < connections_no ; i++)
+	{
+
+		tcp_send(connections[i], msg);
+
+
+
+	}
+
+
+	return 0;
+}
+
+
+
 /*******************************************************************************/
 static int syslog_facility_atoi(char *facility)
 {
@@ -567,6 +607,8 @@ err:
 	if (a_spec) zlog_spec_del(a_spec);
 	return -1;
 }
+
+
 
 zlog_rule_t *zlog_rule_new(char *line,
 		zc_arraylist_t *levels,
@@ -814,6 +856,7 @@ zlog_rule_t *zlog_rule_new(char *line,
 				a_rule->output = zlog_rule_output_static_file_single;
 			} else {
 				/* as rotate, so need to reopen everytime */
+
 				a_rule->output = zlog_rule_output_static_file_rotate;
 			}
 
@@ -848,24 +891,82 @@ zlog_rule_t *zlog_rule_new(char *line,
 		a_rule->output = zlog_rule_output_pipe;
 		break;
 	case '>' :
-		if (STRNCMP(file_path + 1, ==, "syslog", 6)) {
-			a_rule->syslog_facility = syslog_facility_atoi(file_limit);
-			if (a_rule->syslog_facility == -187) {
-				zc_error("-187 get");
+			if (STRNCMP(file_path + 1, ==, "syslog", 6)) {
+				a_rule->syslog_facility = syslog_facility_atoi(file_limit);
+				if (a_rule->syslog_facility == -187) {
+					zc_error("-187 get");
+					goto err;
+				}
+				a_rule->output = zlog_rule_output_syslog;
+				openlog(NULL, LOG_NDELAY | LOG_NOWAIT | LOG_PID, LOG_USER);
+			} else if (STRNCMP(file_path + 1, ==, "stdout", 6)) {
+				a_rule->output = zlog_rule_output_stdout;
+			} else if (STRNCMP(file_path + 1, ==, "stderr", 6)) {
+				a_rule->output = zlog_rule_output_stderr;
+			}
+			else {
+				zc_error
+				    ("[%s]the string after is not syslog, stdout or stderr", output);
 				goto err;
 			}
-			a_rule->output = zlog_rule_output_syslog;
-			openlog(NULL, LOG_NDELAY | LOG_NOWAIT | LOG_PID, LOG_USER);
-		} else if (STRNCMP(file_path + 1, ==, "stdout", 6)) {
-			a_rule->output = zlog_rule_output_stdout;
-		} else if (STRNCMP(file_path + 1, ==, "stderr", 6)) {
-			a_rule->output = zlog_rule_output_stderr;
-		} else {
-			zc_error
-			    ("[%s]the string after is not syslog, stdout or stderr", output);
-			goto err;
-		}
-		break;
+			break;
+	case ':' :{
+
+				int counter = 1;
+				char IP[512];
+				char PORT[6];
+				int port=0;
+
+				while(file_path[counter] != ':'){
+
+
+					if(counter > 15) //biggest possible ip address
+					{
+						zc_error("[%s]error in the ip address for TCP log.", output);
+						goto err;
+					}
+					IP[counter-1]=file_path[counter];
+					counter++;
+
+
+				}
+				IP[counter-1]='\0';
+				int port_counter=0;
+
+				while(file_path[1 + counter] != '\0'){	//2 is the second double points
+
+					PORT[port_counter]=file_path[1+counter];	//ASCII LETTERS, convert to INT.
+					counter++;
+					port_counter++;
+
+					if(port_counter > 6) //biggest possible ip address
+					{
+					zc_error("[%s]error in port for TCP log.", output);
+						goto err;
+					}
+
+				}
+				PORT[port_counter]='\0';
+
+				port = atoi(PORT);
+
+				ph_acceptor_node_t * acceptor = mem_zalloc(zlog_mem_pool,sizeof(ph_acceptor_node_t));
+
+				acceptor->bind_ip_str = *(ph_str*) mem_zalloc(zlog_mem_pool,sizeof(ph_str));
+
+				charp_dup_str(&acceptor->bind_ip_str, IP, zlog_mem_pool);		//ToDo change all mem Pool in here to extern above
+
+				if (str_to_ip_address(acceptor->bind_ip_str, &acceptor->bind_ip) == 0) {
+				}
+				acceptor->type = ACCEPTOR_TYPE_TCP;
+				acceptor->port = port;
+
+				phl_append(&a_rule->tcp_srv.acceptors, acceptor);
+				a_rule->tcp_srv.htable_size =32;
+
+				a_rule->output = zlog_rule_output_tcpout;
+
+			break;}
 	case '$' :
 		sscanf(file_path + 1, "%s", a_rule->record_name);
 			

@@ -691,4 +691,3 @@ err:
 	zlog_spec_del(a_spec);
 	return NULL;
 }
-
