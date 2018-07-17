@@ -20,9 +20,9 @@
 #include "zc_defs.h"
 #include "rule.h"
 #include "version.h"
-#include "../xml/xml_helper.h"
-#include "../../utils/sockets/tcp_comm.h"
-#include "../bin/bin.h"
+#include "../../../utils/xml/xml_helper.h"
+#include "../../../utils/sockets/tcp_comm.h"
+#include "../../../utils/bin/bin.h"
 
 #define TCP_REC_BUFFER 120
 
