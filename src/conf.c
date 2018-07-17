@@ -16,7 +16,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <time.h>
-#include "../xml/xml_helper.h"
+#include "../../../utils/xml/xml_helper.h"
 
 #include "conf.h"
 #include "rule.h"
