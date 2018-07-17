@@ -1,4 +1,4 @@
-L:/*
+/*
  * This file is part of the zlog Library.
  *
  * Copyright (C) 2011 by Hardy Simpson <HardySimpson1984@gmail.com>
