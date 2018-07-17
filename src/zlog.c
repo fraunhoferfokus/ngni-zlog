@@ -283,11 +283,11 @@ int start_listener_thread( zlog_rule_t *rule)
 
 	    if (num_socks > 0) {
 
-	        LOG(L_WARN, "zlog socket created.\n");
+	        printf("zlog socket created.\n");
 
 	    	tcp_comm_start(zlog_mem_pool, rule->tcp_srv.socks, &log_serv_connection_handler);
 	    } else {
-	        LOG(L_WARN, "No sockets created.\n");
+	        printf("No sockets created.\n");
 	        return 0;
 	    }
 

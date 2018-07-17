@@ -15,9 +15,7 @@ extern "C" {
 
 #include <stdarg.h> /* for va_list */
 #include <stdio.h> /* for size_t */
-#include "../xml/xml_helper.h"
-#include "../struct/ring_buf.h"
-
+#include "../../../utils/utils.h"
 
 # if defined __GNUC__
 #   define ZLOG_CHECK_PRINTF(m,n) __attribute__((format(printf,m,n)))
