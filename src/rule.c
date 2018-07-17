@@ -30,7 +30,6 @@
 
 #include "zc_defs.h"
 
-extern ring_buf_t* ring_buffer;
 extern int connections_no;
 extern int connections[20];
 extern phoenix_mem_t *zlog_mem_pool;

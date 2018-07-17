@@ -16,7 +16,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <time.h>
-#include "../xml/xml_helper.h"
+//#include "../xml/xml_helper.h"
 
 #include "conf.h"
 #include "rule.h"
@@ -24,7 +24,7 @@
 #include "level_list.h"
 #include "rotater.h"
 #include "zc_defs.h"
-#include "../bin/bin.h"
+#include "../../../utils/bin/bin.h"
 
 /*******************************************************************************/
 #define ZLOG_CONF_DEFAULT_FORMAT "default = \"%D %V [%p:%F:%L] %m%n\""
