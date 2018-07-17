@@ -99,8 +99,10 @@ static int zlog_conf_build_without_file(zlog_conf_t * a_conf);
 static int zlog_conf_build_with_file(zlog_conf_t * a_conf);
 static int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr i);
 
-zlog_conf_t *zlog_ph_conf_new(xmlNodePtr xml_conf)
+zlog_conf_t *zlog_ph_conf_new(void* xml_conf_obj)
 {
+
+	xmlNodePtr xml_conf = *(xmlNodePtr*)xml_conf_obj;
 	zlog_mem_pool = mem_create_pool("zlog_mem_pool", cm_global);	//Initiating memory can only be placed here
 
 	int nwrite = 0;

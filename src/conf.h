@@ -12,7 +12,6 @@
 #include "zc_defs.h"
 #include "format.h"
 #include "rotater.h"
-#include "../../../utils/xml/xml_helper.h"
 
 typedef struct zlog_conf_s {
 	char file[MAXLEN_PATH + 1];
@@ -41,7 +40,7 @@ typedef struct zlog_conf_s {
 extern zlog_conf_t * zlog_env_conf;
 
 zlog_conf_t *zlog_conf_new(const char *confpath);
-zlog_conf_t *zlog_ph_conf_new(xmlNodePtr conf);		//Parse config from xml
+zlog_conf_t *zlog_ph_conf_new(void* conf);		//Parse config from xml
 
 void zlog_conf_del(zlog_conf_t * a_conf);
 void zlog_conf_profile(zlog_conf_t * a_conf, int flag);
