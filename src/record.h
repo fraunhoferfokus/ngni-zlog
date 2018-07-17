@@ -12,14 +12,12 @@
 #include "zc_defs.h"
 
 /* record is user-defined output function and it's name from configure file */
-#ifndef MSG_ZLOG
-#define MSG_ZLOG
 typedef struct zlog_msg_s {
 	char *buf;
 	size_t len;
 	char *path;
 } zlog_msg_t; /* 3 of this first, see need thread or not later */
-#endif
+
 typedef int (*zlog_record_fn)(zlog_msg_t * msg);
 
 typedef struct zlog_record_s {

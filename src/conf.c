@@ -16,7 +16,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <time.h>
-#include "../xml/xml_helper.h"
 
 #include "conf.h"
 #include "rule.h"
@@ -24,7 +23,6 @@
 #include "level_list.h"
 #include "rotater.h"
 #include "zc_defs.h"
-#include "../bin/bin.h"
 
 /*******************************************************************************/
 #define ZLOG_CONF_DEFAULT_FORMAT "default = \"%D %V [%p:%F:%L] %m%n\""
@@ -36,8 +34,6 @@
 #define ZLOG_CONF_DEFAULT_FSYNC_PERIOD 0
 #define ZLOG_CONF_BACKUP_ROTATE_LOCK_FILE "/tmp/zlog.lock"
 /*******************************************************************************/
-
-extern phoenix_mem_t *zlog_mem_pool;
 
 void zlog_conf_profile(zlog_conf_t * a_conf, int flag)
 {
@@ -97,74 +93,6 @@ void zlog_conf_del(zlog_conf_t * a_conf)
 
 static int zlog_conf_build_without_file(zlog_conf_t * a_conf);
 static int zlog_conf_build_with_file(zlog_conf_t * a_conf);
-static int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr i);
-
-zlog_conf_t *zlog_ph_conf_new(xmlNodePtr xml_conf)
-{
-	zlog_mem_pool = mem_create_pool("zlog_mem_pool", cm_global);	//Initiating memory can only be placed here
-
-	int nwrite = 0;
-	int has_conf_file = 0;
-	zlog_conf_t *a_conf = NULL;
-
-	a_conf = calloc(1, sizeof(zlog_conf_t));
-	if (!a_conf) {
-		zc_error("calloc fail, errno[%d]", errno);
-		return NULL;
-	}
-
-
-		memset(a_conf->file, 0x00, sizeof(a_conf->file));
-		has_conf_file = 0;
-
-
-
-	/* set default configuration start */
-	a_conf->strict_init = 1;
-	a_conf->buf_size_min = ZLOG_CONF_DEFAULT_BUF_SIZE_MIN;
-	a_conf->buf_size_max = ZLOG_CONF_DEFAULT_BUF_SIZE_MAX;
-	if (has_conf_file) {
-		/* configure file as default lock file */
-		strcpy(a_conf->rotate_lock_file, a_conf->file);
-	} else {
-		strcpy(a_conf->rotate_lock_file, ZLOG_CONF_BACKUP_ROTATE_LOCK_FILE);
-	}
-	strcpy(a_conf->default_format_line, ZLOG_CONF_DEFAULT_FORMAT);
-	a_conf->file_perms = ZLOG_CONF_DEFAULT_FILE_PERMS;
-	a_conf->reload_conf_period = ZLOG_CONF_DEFAULT_RELOAD_CONF_PERIOD;
-	a_conf->fsync_period = ZLOG_CONF_DEFAULT_FSYNC_PERIOD;
-	/* set default configuration end */
-
-	a_conf->levels = zlog_level_list_new();
-	if (!a_conf->levels) {
-		zc_error("zlog_level_list_new fail");
-		goto err;
-	}
-
-	a_conf->formats = zc_arraylist_new((zc_arraylist_del_fn) zlog_format_del);
-	if (!a_conf->formats) {
-		zc_error("zc_arraylist_new fail");
-		goto err;
-	}
-
-	a_conf->rules = zc_arraylist_new((zc_arraylist_del_fn) zlog_rule_del);
-	if (!a_conf->rules) {
-		zc_error("init rule_list fail");
-		goto err;
-	}
-
-		if (zlog_ph_conf_build_with_xml(a_conf, xml_conf)) {
-			zc_error("zlog_conf_build_without_file fail");
-			goto err;
-		}
-
-
-	zlog_conf_profile(a_conf, ZC_DEBUG);
-	return a_conf;
-err:
-	zlog_conf_del(a_conf);
-	return NULL;
-}
 
 zlog_conf_t *zlog_conf_new(const char *confpath)
 {
@@ -287,215 +215,6 @@ static int zlog_conf_build_without_file(zlog_conf_t * a_conf)
 /*******************************************************************************/
 static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section);
 
-
-static int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
-{
-	int rc = 0;
-	struct zlog_stat a_stat;
-	struct tm local_time;
-	int default_rule_init = 0;
-	char line[MAXLEN_CFG_LINE + 1];
-	size_t line_len;
-	char *pline = NULL;
-	char *p = NULL;
-	int line_no = 0;
-	int i = 0;
-	int in_quotation = 0;
-
-	int section = 0;
-	/* [global:1] [levels:2] [formats:3] [rules:4] */
-
-	/* Now process the file.
-	 */
-	pline = line;
-	memset(&line, 0x00, sizeof(line));
-
-	long int l;
-	xmlChar	*xc = 0;
-	xmlNodePtr j=0;
-	for(j=xml_conf->children;j;j=j->next) {
-		if (j->type==XML_ELEMENT_NODE){
-
-			memset(&line, 0x00, sizeof(line));
-
-			if (strcasecmp((char*)j->name,"Global")==0){section = 1;}
-			else if(strcasecmp((char*)j->name,"Level")==0){section = 2;}
-			else if(strcasecmp((char*)j->name,"Format")==0){section = 3;}
-			else if(strcasecmp((char*)j->name,"Rule")==0){
-				section = 4;
-				if(!default_rule_init)
-				{if (a_conf->reload_conf_period != 0
-						&& a_conf->fsync_period >= a_conf->reload_conf_period) {
-						/* as all rule will be rebuilt when conf is reload,
-						 * so fsync_period > reload_conf_period will never
-						 * cause rule to fsync it's file.
-						 * fsync_period will be meaningless and down speed,
-						 * so make it zero.
-						 */
-						zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
-							"set fsync_period to zero");
-						a_conf->fsync_period = 0;
-					}
-
-					/* now build rotater and default_format
-					 * from the unchanging global setting,
-					 * for zlog_rule_new() */
-					a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
-					if (!a_conf->rotater) {
-						zc_error("zlog_rotater_new fail");
-						return -1;
-					}
-
-					a_conf->default_format = zlog_format_new(a_conf->default_format_line,
-									&(a_conf->time_cache_count));
-					if (!a_conf->default_format) {
-						zc_error("zlog_format_new fail");
-						return -1;
-					}
-				default_rule_init=1;
-				}
-
-			}
-			switch(section)
-			{
-
-			case 1:
-
-							xc = xmlGetProp(j,(xmlChar*) "key");
-
-							memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
-
-							memcpy(line+ strlen(line), " = ", 3);
-
-							xc = xmlGetProp(j,(xmlChar*) "value");
-
-							line[strlen(line)]=' ';
-
-							memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
-
-
-							break;
-
-
-			case 2:
-
-							xc = xmlGetProp(j,(xmlChar*)"level");
-
-							memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
-
-							memcpy(line+ strlen(line), " = ", 3);
-
-							xc = xmlGetProp(j,(xmlChar*)"value");
-
-							line[strlen(line)]=' ';
-
-							memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
-
-
-
-							break;
-			case 3:
-
-				xc = xmlGetProp(j,(xmlChar*)"name");
-
-				memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
-
-				memcpy(line+ strlen(line), " = ", 3);
-
-				xc = xmlGetProp(j,(xmlChar*)"pattern");
-
-				line[strlen(line)]='"';
-
-				int i = strlen(line) ; 		//here to replace / with %
-
-				memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
-
-				for ( ; i< strlen(line); i++)
-					if(line[i]=='/')
-						line[i]='%';
-
-				line[strlen(line)]='"';
-
-
-				break;
-			case 4:
-						xc = xmlGetProp(j,(xmlChar*)"category");
-
-						memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
-
-						line[strlen(line)]='.';
-
-						xc = xmlGetProp(j,(xmlChar*)"level");
-
-						memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
-
-						line[strlen(line)]=' ';
-
-						xc = xmlGetProp(j,(xmlChar*)"output");
-
-						memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
-
-						xc = xmlGetProp(j,(xmlChar*)"format");
-
-						line[strlen(line)]=' ';
-
-						memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
-
-						break;
-
-							/*			case 5:
-
-						xc = xmlGetProp(i, (xmlChar*) "bind");
-
-
-						if(xc && strlen((char*)xc)){
-
-						phoenix_instance_cfg.log_cfg.acceptors.bind = (char*) xc;
-
-						if(xml_get_prop_as_int(i,(char*)"port",&l)){
-
-						}
-							phoenix_instance_cfg.log_cfg.acceptors.port = l;
-
-							xc = xmlGetProp(i, (xmlChar*) "type");
-
-							if(xc)
-								phoenix_instance_cfg.log_cfg.acceptors.type = (char*) xc;
-							else
-								phoenix_instance_cfg.log_cfg.acceptors.type = 0;
-
-
-						}
-						else{
-							LOG_ERR("IP address for logging provided but port is missed.\n");
-							return 0;
-						}
-	*/		}
-			if(section<5)
-			rc = zlog_conf_parse_line(a_conf, line, &section);
-
-					if (rc < 0) {
-						zc_error("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-						zc_error("line[%s]", line);
-						goto exit;
-					} else if (rc > 0) {
-						zc_warn("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-						zc_warn("line[%s]", line);
-						zc_warn("as strict init is set to false, ignore and go on");
-						rc = 0;
-						continue;
-					}
-
-			}
-
-
-	}
-	return rc;
-
-exit:
-	return rc;
-}
-
 static int zlog_conf_build_with_file(zlog_conf_t * a_conf)
 {
 	int rc = 0;
@@ -612,7 +331,6 @@ exit:
 /* section [global:1] [levels:2] [formats:3] [rules:4] */
 static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
 {
-
 	int nscan;
 	int nread;
 	char name[MAXLEN_CFG_LINE + 1];
@@ -630,7 +348,6 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
 	}
 
 	/* get and set outer section flag, so it is a closure? haha */
-
 	if (line[0] == '[') {
 		int last_section = *section;
 		nscan = sscanf(line, "[ %[^] \t]", name);

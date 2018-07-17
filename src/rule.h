@@ -22,17 +22,12 @@
 #include "thread.h"
 #include "rotater.h"
 #include "record.h"
-#include "../sockets/acceptor.h"
-#include "../struct/ring_buf.h"
 
 typedef struct zlog_rule_s zlog_rule_t;
 
 typedef int (*zlog_rule_output_fn) (zlog_rule_t * a_rule, zlog_thread_t * a_thread);
 
-int_list_t sockets;
-
 struct zlog_rule_s {
-
 	char category[MAXLEN_CFG_LINE + 1];
 	char compare_char;
 	/* 
@@ -41,8 +36,6 @@ struct zlog_rule_s {
 	 * [=] log level == rule level 
 	 * [!] log level != rule level
 	 */
-	int ring_reader_id;
-
 	int level;
 	unsigned char level_bitmap[32]; /* for category determine whether ouput or not */
 
@@ -75,13 +68,6 @@ struct zlog_rule_s {
 	char record_name[MAXLEN_PATH + 1];
 	char record_path[MAXLEN_PATH + 1];
 	zlog_record_fn record_func;
-
-	struct {
-				uint32_t htable_size;
-	            ph_acceptor_list_t acceptors;
-	            int_list_t *socks;
-
-			} tcp_srv;
 };
 
 zlog_rule_t *zlog_rule_new(char * line,
