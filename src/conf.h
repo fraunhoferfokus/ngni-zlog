@@ -12,7 +12,7 @@
 #include "zc_defs.h"
 #include "format.h"
 #include "rotater.h"
-#include "../../../utils/xml/xml_helper.h"
+#include "../xml/xml_helper.h"
 
 typedef struct zlog_conf_s {
 	char file[MAXLEN_PATH + 1];

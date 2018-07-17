@@ -22,7 +22,8 @@
 #include "thread.h"
 #include "rotater.h"
 #include "record.h"
-#include "../../../utils/sockets/acceptor.h"
+#include "../sockets/acceptor.h"
+#include "../struct/ring_buf.h"
 
 typedef struct zlog_rule_s zlog_rule_t;
 
