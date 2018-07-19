@@ -34,12 +34,10 @@ CC:=$(shell sh -c 'type $(CC) >/dev/null 2>/dev/null && echo $(CC) || echo gcc')
 OPTIMIZATION?=-O2
 WARNINGS=-Wall -Wstrict-prototypes -fwrapv
 DEBUG?= -g -ggdb
-REAL_CFLAGS=$(OPTIMIZATION) -fPIC -pthread $(CFLAGS) $(WARNINGS) $(DEBUG)
+REAL_CFLAGS=$(OPTIMIZATION) -fPIC -pthread  $(CFLAGS) $(WARNINGS) $(DEBUG) -lxml2 -I/usr/include/libxml2
+
 REAL_LDFLAGS=$(LDFLAGS) -pthread
-
-CFLAGS=`xml2-config --cflags`
-LIBS=`xml2-config --libs`
-
+BS=$(shell pkg-config --libs libxml-2.0)
 
 DYLIBSUFFIX=so
 STLIBSUFFIX=a
@@ -63,7 +61,6 @@ INSTALL_BINARY_PATH=  $(PREFIX)/$(BINARY_PATH)
 uname_S := $(shell sh -c 'uname -s 2>/dev/null || echo not')
 ifeq ($(uname_S),SunOS)
 #  REAL_LDFLAGS+= -ldl -lnsl -lsocket
-  DYLIB_MAKE_CMD=$(CC) -G -o $(DYLIBNAME) -h $(DYLIB_MINOR_NAME) $(LDFLAGS)
   INSTALL= cp -r
 endif
 ifeq ($(uname_S),Darwin)
@@ -147,7 +144,7 @@ static: $(STLIBNAME)
 
 # Binaries:
 zlog-chk-conf: zlog-chk-conf.o $(STLIBNAME) $(DYLIBNAME)
-	$(CC) -o $@ zlog-chk-conf.o -L. -lzlog $(REAL_LDFLAGS)
+	$(CC) -o $@ zlog-chk-conf.o -L. -lzlog -lxml2  $(REAL_LDFLAGS)
 
 .c.o:
 	$(CC) -std=c99 -pedantic -c $(REAL_CFLAGS) $<
@@ -173,7 +170,7 @@ INSTALL?= cp -a
 
 install: $(DYLIBNAME) $(STLIBNAME)
 	mkdir -p $(INSTALL_INCLUDE_PATH) $(INSTALL_LIBRARY_PATH) $(INSTALL_BINARY_PATH)
-	$(INSTALL) zlog.h $(INSTALL_INCLUDE_PATH)
+	$(INSTALL) buf.h format.h thread.h zc_hashtable.h zc_xplatform.h conf.h mdc.h zc_arraylist.h zc_profile.h zlog.h event.h rotater.h zc_defs.h zc_util.h $(INSTALL_INCLUDE_PATH)
 	$(INSTALL) zlog-chk-conf $(INSTALL_BINARY_PATH)
 	$(INSTALL) $(DYLIBNAME) $(INSTALL_LIBRARY_PATH)/$(DYLIB_MINOR_NAME)
 	cd $(INSTALL_LIBRARY_PATH) && ln -sf $(DYLIB_MINOR_NAME) $(DYLIB_MAJOR_NAME)

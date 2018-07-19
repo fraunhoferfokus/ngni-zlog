@@ -15,4 +15,7 @@
 #include "zc_xplatform.h"
 #include "zc_util.h"
 
+//ph constant.
+#define TCP_HTABLE_DEFAULT_SIZE 32
+
 #endif

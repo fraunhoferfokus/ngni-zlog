@@ -48,7 +48,7 @@ static int zlog_level_list_set_default(zc_arraylist_t *levels)
 	|| zlog_level_list_set(levels, "NOTICE = 60, LOG_NOTICE")
 	|| zlog_level_list_set(levels, "WARN = 80, LOG_WARNING")
 	|| zlog_level_list_set(levels, "ERROR = 100, LOG_ERR")
-	|| zlog_level_list_set(levels, "FATAL = 120, LOG_ALERT")
+	|| zlog_level_list_set(levels, "ALERT = 120, LOG_ALERT")
 	|| zlog_level_list_set(levels, "UNKNOWN = 254, LOG_ERR")
 	|| zlog_level_list_set(levels, "! = 255, LOG_INFO");
 }

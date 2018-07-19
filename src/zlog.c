@@ -13,6 +13,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <pthread.h>
+
 #include "conf.h"
 #include "category_table.h"
 #include "record_table.h"
@@ -20,15 +21,22 @@
 #include "zc_defs.h"
 #include "rule.h"
 #include "version.h"
-#include "../../../utils/utils.h"
 
-#define TCP_REC_BUFFER 120
+/************Library extending variables**
+*
+*	By Manar Zaboub
+*
+*****************************************/
+//TCP Deps .
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+int connections_no = 0;
+int connections[TCP_HTABLE_DEFAULT_SIZE];
+int tcp_connection = 0;
 
-ph_str* ph[512];
-
-phoenix_mem_t *zlog_mem_pool;
-
-/********************************************************""***********************/
+/*******************************************************************************/
 extern char *zlog_git_sha1;
 /*******************************************************************************/
 static pthread_rwlock_t zlog_env_lock = PTHREAD_RWLOCK_INITIALIZER;
@@ -42,7 +50,6 @@ static int zlog_env_is_init = 0;
 static int zlog_env_init_version = 0;
 /*******************************************************************************/
 /* inner no need thread-safe */
-
 static void zlog_fini_inner(void)
 {
 	/* pthread_key_delete(zlog_thread_key); */
@@ -122,7 +129,6 @@ err:
 /*******************************************************************************/
 int zlog_init(const char *confpath)
 {
-
 	int rc;
 	zc_debug("------zlog_init start------");
 	zc_debug("------compile time[%s %s], version[%s]------", __DATE__, __TIME__, ZLOG_VERSION);
@@ -192,7 +198,7 @@ int dzlog_init(const char *confpath, const char *cname)
 				cname,
 				zlog_env_conf->rules);
 	if (!zlog_default_category) {
-		zc_error("zlog_category_tzlog_ph_relable_fetch_category[%s] fail", cname);
+		zc_error("zlog_category_table_fetch_category[%s] fail", cname);
 		goto err;
 	}
 
@@ -216,300 +222,6 @@ err:
 	return -1;
 }
 /*******************************************************************************/
-
-
-void *
-log_conn_cleanup(void *ptr) {
-
-	ph_tcp_conn_t *conn = 0;
-	conn = (ph_tcp_conn_t*) ptr;
-	if (conn) {
-
-		mem_destroy(conn->mem_pool);
-	}
-	return (void *) 1;
-}
-void *
-log_tcp_loop(void *ptr) {
-
-
-	/**Comment in if bidirectional TCP socket
-	ph_tcp_conn_t *conn = (ph_tcp_conn_t*) ptr;
-	uint8_t buf[TCP_REC_BUFFER];
-	int rec_len = 0;
-	ph_str no_buf_msg = { "Buffer empty" , strlen( "Buffer empty")};
-
-    printf("loop started.\n");
-
-    do {
-	tcp_send(conn->socket, no_buf_msg);
-
-	} while (rec_len > 0);
-
-**/
-	return (NULL);
-}
-int connections_no=0;
-int connections[20];
-
-int
-log_serv_connection_handler(ph_tcp_conn_t *conn)
-{
-
-
-	connections[connections_no]=conn->socket;
-	connections_no++;
-
-    printf("zlog connection handler.\n");
-
-    phoenix_spawn_task_t *log_serv_tcp_task = mem_zalloc(conn->mem_pool, sizeof (phoenix_spawn_task_t));
-    log_serv_tcp_task->args = conn;
-    log_serv_tcp_task->rank = PHOENIX_EXEC_UNIT_WORKER;
-    log_serv_tcp_task->handler = log_tcp_loop;
-    log_serv_tcp_task->cleanup = log_conn_cleanup;
-    exec_unit_id_u tcp_euid;
-
-    phoenix_spawn_with_id_thread( "LOG_SERV_TCP_loop", log_serv_tcp_task, &tcp_euid);
-
-    return 1;
-}
-int start_listener_thread( zlog_rule_t *rule)
-{
-		printf("Start listener for zlog server\n");
-
-	    rule->tcp_srv.socks = mem_zalloc(zlog_mem_pool, sizeof (int_list_t));
-
-	    int num_socks  = tcp_comm_init(zlog_mem_pool, &rule->tcp_srv.acceptors, rule->tcp_srv.socks);
-
-	    if (num_socks > 0) {
-
-	        printf("zlog socket created.\n");
-
-	    	tcp_comm_start(zlog_mem_pool, rule->tcp_srv.socks, &log_serv_connection_handler);
-	    } else {
-	        printf("No sockets created.\n");
-	        return 0;
-	    }
-
-	    return 1;
-
-}
-int
-log_serv_connecion_start_listener(zlog_rule_t *rule) {
-
-
-
-    printf("Spawning log Server Connection Thread.\n");
-    phoenix_spawn_task_t *log_serv_tcp_task = mem_zalloc(zlog_mem_pool, sizeof (phoenix_spawn_task_t));
-    log_serv_tcp_task->args = rule;
-    log_serv_tcp_task->rank = PHOENIX_EXEC_UNIT_WORKER;
-    log_serv_tcp_task->handler = start_listener_thread;
-    exec_unit_id_u tcp_euid;
-     phoenix_spawn_with_id_thread( "zlog_TCP_listener", log_serv_tcp_task, &tcp_euid);
-	return 0;
-
-
-}
-
-int zlog_ph_reload_cfg(void* config)
-{
-		zlog_mem_pool = mem_create_pool("zlog_mem_pool", cm_global);
-
-
-		zlog_conf_t* new_conf = (zlog_conf_t*)config;
-		char* confpath="";
-		int rc = 0;
-		int i = 0;
-		zlog_rule_t *a_rule;
-		int c_up = 0;
-
-		zc_debug("------zlog_reload start------");
-		rc = pthread_rwlock_wrlock(&zlog_env_lock);
-		if (rc) {
-			zc_error("pthread_rwlock_wrlock fail, rc[%d]", rc);
-			return -1;
-		}
-
-		if (!zlog_env_is_init) {
-			zc_error("never call zlog_init() or dzlog_init() before");
-			goto quit;
-		}
-
-		/* use last conf file */
-		if (!new_conf) {
-				zc_error("zlog_conf_new fail");
-				goto err;
-			}
-
-		if (new_conf == NULL) confpath = zlog_env_conf->file;
-
-		/* reach reload period */
-		if (confpath == (char*)-1) {
-			/* test again, avoid other threads already reloaded */
-			if (zlog_env_reload_conf_count > zlog_env_conf->reload_conf_period) {
-				confpath = zlog_env_conf->file;
-			} else {
-				/* do nothing, already done */
-				goto quit;
-			}
-		}
-
-
-		zlog_env_reload_conf_count = 0;
-		int o=1;		//This needs to be fixed.
-						//When printing with zlog is called, thread is unlocked.
-		zc_arraylist_foreach(new_conf->rules, i, a_rule) {
-
-		if(zlog_mem_pool)
-		{
-
-
-			if(a_rule->tcp_srv.htable_size)
-			{
-				log_serv_connecion_start_listener(a_rule);
-				o = 0;
-			}
-		}
-
-			zlog_rule_set_record(a_rule, zlog_env_records);
-		}
-
-		if (zlog_category_table_update_rules(zlog_env_categories, new_conf->rules)) {
-			c_up = 0;
-			zc_error("zlog_category_table_update fail");
-			goto err;
-		} else {
-			c_up = 1;
-		}
-
-		zlog_env_init_version++;
-
-		if (c_up) zlog_category_table_commit_rules(zlog_env_categories);
-		zlog_conf_del(zlog_env_conf);
-		zlog_env_conf = new_conf;
-		zc_debug("------zlog_reload success, total init verison[%d] ------", zlog_env_init_version);
-		if(o)
-		rc = pthread_rwlock_unlock(&zlog_env_lock);
-
-
-		if (rc) {
-			zc_error("pthread_rwlock_unlock fail, rc=[%d]", rc);
-			return -1;
-		}
-		return 0;
-	err:
-		/* fail, roll back everything */
-		zc_warn("zlog_reload fail, use old conf file, still working");
-		if (new_conf) zlog_conf_del(new_conf);
-		if (c_up) zlog_category_table_rollback_rules(zlog_env_categories);
-		zc_error("------zlog_reload fail, total init version[%d] ------", zlog_env_init_version);
-		rc = pthread_rwlock_unlock(&zlog_env_lock);
-		if (rc) {
-			zc_error("pthread_rwlock_unlock fail, rc=[%d]", rc);
-			return -1;
-		}
-		return -1;
-	quit:
-		zc_debug("------zlog_reload do nothing------");
-		rc = pthread_rwlock_unlock(&zlog_env_lock);
-		if (rc) {
-			zc_error("pthread_rwlock_unlock fail, rc=[%d]", rc);
-			return -1;
-		}
-		return 0;
-}
-int zlog_ph_reload_xml(xmlNodePtr xml_node)
-{
-
-		char* confpath="";
-		int rc = 0;
-		int i = 0;
-		zlog_conf_t *new_conf = NULL;
-		zlog_rule_t *a_rule;
-		int c_up = 0;
-
-		zc_debug("------zlog_reload start------");
-		rc = pthread_rwlock_wrlock(&zlog_env_lock);
-		if (rc) {
-			zc_error("pthread_rwlock_wrlock fail, rc[%d]", rc);
-			return -1;
-		}
-
-		if (!zlog_env_is_init) {
-			zc_error("never call zlog_init() or dzlog_init() before");
-			goto quit;
-		}
-
-		/* use last conf file */
-		if (xml_node == NULL) confpath = zlog_env_conf->file;
-
-		/* reach reload period */
-		if (confpath == (char*)-1) {
-			/* test again, avoid other threads already reloaded */
-			if (zlog_env_reload_conf_count > zlog_env_conf->reload_conf_period) {
-				confpath = zlog_env_conf->file;
-			} else {
-				/* do nothing, already done */
-				goto quit;
-			}
-		}
-
-		/* reset counter, whether automaticlly or mannually */
-		zlog_env_reload_conf_count = 0;
-
-		new_conf = zlog_ph_conf_new(xml_node);
-		if (!new_conf) {
-			zc_error("zlog_conf_new fail");
-			goto err;
-		}
-
-		zc_arraylist_foreach(new_conf->rules, i, a_rule) {
-			zlog_rule_set_record(a_rule, zlog_env_records);
-		}
-
-		if (zlog_category_table_update_rules(zlog_env_categories, new_conf->rules)) {
-			c_up = 0;
-			zc_error("zlog_category_table_update fail");
-			goto err;
-		} else {
-			c_up = 1;
-		}
-
-		zlog_env_init_version++;
-
-		if (c_up) zlog_category_table_commit_rules(zlog_env_categories);
-		zlog_conf_del(zlog_env_conf);
-		zlog_env_conf = new_conf;
-		zc_debug("------zlog_reload success, total init verison[%d] ------", zlog_env_init_version);
-
-		rc = pthread_rwlock_unlock(&zlog_env_lock);
-		if (rc) {
-			zc_error("pthread_rwlock_unlock fail, rc=[%d]", rc);
-			return -1;
-		}
-		return 0;
-	err:
-		/* fail, roll back everything */
-		zc_warn("zlog_reload fail, use old conf file, still working");
-		if (new_conf) zlog_conf_del(new_conf);
-		if (c_up) zlog_category_table_rollback_rules(zlog_env_categories);
-		zc_error("------zlog_reload fail, total init version[%d] ------", zlog_env_init_version);
-		rc = pthread_rwlock_unlock(&zlog_env_lock);
-		if (rc) {
-			zc_error("pthread_rwlock_unlock fail, rc=[%d]", rc);
-			return -1;
-		}
-		return -1;
-	quit:
-		zc_debug("------zlog_reload do nothing------");
-		rc = pthread_rwlock_unlock(&zlog_env_lock);
-		if (rc) {
-			zc_error("pthread_rwlock_unlock fail, rc=[%d]", rc);
-			return -1;
-		}
-		return 0;
-}
-
 int zlog_reload(const char *confpath)
 {
 	int rc = 0;
@@ -602,6 +314,7 @@ quit:
 void zlog_fini(void)
 {
 	int rc = 0;
+	tcp_connection = 0;		//to close tcp socket
 
 	zc_debug("------zlog_fini start------");
 	rc = pthread_rwlock_wrlock(&zlog_env_lock);
@@ -1177,15 +890,11 @@ reload:
 void dzlog(const char *file, size_t filelen, const char *func, size_t funclen, long line, int level,
 	const char *format, ...)
 {
-
-
-//	if(!zlog_ph_is_init())
-//			return;
-
 	zlog_thread_t *a_thread;
 	va_list args;
-	pthread_rwlock_rdlock(&zlog_env_lock);
 
+
+	pthread_rwlock_rdlock(&zlog_env_lock);
 
 	if (!zlog_env_is_init) {
 		zc_error("never call zlog_init() or dzlog_init() before");
@@ -1199,7 +908,7 @@ void dzlog(const char *file, size_t filelen, const char *func, size_t funclen, l
 		goto exit;
 	}
 
-	//if (zlog_category_needless_level(zlog_default_category, level)) goto exit;
+	if (zlog_category_needless_level(zlog_default_category, level)) goto exit;
 
 	zlog_fetch_thread(a_thread, exit);
 
@@ -1312,3 +1021,178 @@ int zlog_set_record(const char *rname, zlog_record_fn record_output)
 }
 
 const char *zlog_version(void) { return ZLOG_VERSION; }
+
+
+
+/************Library extending variables*******
+*
+*	By Manar Zaboub
+*
+*****************************************/
+void *connection_handler(void *t_rule)
+{
+	zlog_rule_t* a_rule = (zlog_rule_t*) t_rule;
+
+	int sockfd;
+	socklen_t clilen;
+	char buffer[256];
+	struct sockaddr_in serv_addr, cli_addr;
+	int n;
+
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0)
+		perror("ERROR opening socket");
+	bzero((char *) &serv_addr, sizeof(serv_addr));
+
+	serv_addr.sin_family = AF_INET;
+	inet_pton(AF_INET, a_rule->tcp_srv.bind_ip_str, &(serv_addr.sin_addr));
+	serv_addr.sin_port = htons(a_rule->tcp_srv.port);
+
+	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
+		perror("ERROR on binding");
+	listen(sockfd, 5);
+	clilen = sizeof(cli_addr);
+
+
+
+	while(tcp_connection && connections_no < TCP_HTABLE_DEFAULT_SIZE) {
+
+		connections[connections_no] = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+
+		if (connections[connections_no] < 0)
+			perror("ERROR on accept");
+		else
+			connections_no++;
+	}
+	int always_true = 1;
+
+	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &always_true, sizeof(int));		//Close socket and make reusable.
+
+}
+int log_serv_connecion_start_listener(	zlog_rule_t *a_rule) {
+
+
+	pthread_t tcp_thread;
+	if( pthread_create( &tcp_thread , NULL ,  connection_handler , (void*) a_rule) < 0)
+	{
+		perror("could not create thread for accepting connections.");
+		return 1;
+	}
+	return 0;
+
+}
+
+int zlog_reload_with_obj(void* config)
+{
+
+
+		zlog_conf_t* new_conf = (zlog_conf_t*)config;
+		char* confpath="";
+		int rc = 0;
+		int i = 0;
+		zlog_rule_t *a_rule;
+		int c_up = 0;
+
+		zc_debug("------zlog_reload start------");
+		rc = pthread_rwlock_wrlock(&zlog_env_lock);
+		if (rc) {
+			zc_error("pthread_rwlock_wrlock fail, rc[%d]", rc);
+			return -1;
+		}
+
+		if (!zlog_env_is_init) {
+			zc_error("never call zlog_init() or dzlog_init() before");
+			goto quit;
+		}
+
+		/* use last conf file */
+		if (!new_conf) {
+				zc_error("zlog_conf_new fail");
+				goto err;
+			}
+
+		if (new_conf == NULL) confpath = zlog_env_conf->file;
+
+		/* reach reload period */
+		if (confpath == (char*)-1) {
+			/* test again, avoid other threads already reloaded */
+			if (zlog_env_reload_conf_count > zlog_env_conf->reload_conf_period) {
+				confpath = zlog_env_conf->file;
+			} else {
+				/* do nothing, already done */
+				goto quit;
+			}
+		}
+
+
+		zlog_env_reload_conf_count = 0;
+
+		zc_arraylist_foreach(new_conf->rules, i, a_rule) {
+
+
+
+			if(a_rule->tcp_srv.htable_size == TCP_HTABLE_DEFAULT_SIZE)
+			{
+				log_serv_connecion_start_listener(a_rule);
+				tcp_connection=1;
+			}
+
+			zlog_rule_set_record(a_rule, zlog_env_records);
+		}
+
+		if (zlog_category_table_update_rules(zlog_env_categories, new_conf->rules)) {
+			c_up = 0;
+			zc_error("zlog_category_table_update fail");
+			goto err;
+		} else {
+			c_up = 1;
+		}
+
+		zlog_env_init_version++;
+
+		if (c_up) zlog_category_table_commit_rules(zlog_env_categories);
+		zlog_conf_del(zlog_env_conf);
+		zlog_env_conf = new_conf;
+		zc_debug("------zlog_reload success, total init verison[%d] ------", zlog_env_init_version);
+
+		rc = pthread_rwlock_unlock(&zlog_env_lock);
+
+
+		if (rc) {
+			zc_error("pthread_rwlock_unlock fail, rc=[%d]", rc);
+			return -1;
+		}
+		return 0;
+	err:
+		/* fail, roll back everything */
+		zc_warn("zlog_reload fail, use old conf file, still working");
+		if (new_conf) zlog_conf_del(new_conf);
+		if (c_up) zlog_category_table_rollback_rules(zlog_env_categories);
+		zc_error("------zlog_reload fail, total init version[%d] ------", zlog_env_init_version);
+		rc = pthread_rwlock_unlock(&zlog_env_lock);
+		if (rc) {
+			zc_error("pthread_rwlock_unlock fail, rc=[%d]", rc);
+			return -1;
+		}
+		return -1;
+	quit:
+		zc_debug("------zlog_reload do nothing------");
+		rc = pthread_rwlock_unlock(&zlog_env_lock);
+		if (rc) {
+			zc_error("pthread_rwlock_unlock fail, rc=[%d]", rc);
+			return -1;
+		}
+		return 0;
+}
+void* zlog_get_obj(xmlNodePtr xml_ptr){
+
+	zlog_conf_t* a_conf = zlog_ph_conf(xml_ptr);		//create object, parse xml. return conf object.
+	return (void*) a_conf;
+}
+int zlog_feed_xml(void* xml_cfg){
+
+zlog_conf_t* a_conf = zlog_ph_conf(xml_cfg);		//create object, parse xml. return conf object.
+int i = zlog_reload_with_obj((void*) a_conf);	//reload zlog with object a_conf
+
+		return i ;
+}

@@ -30,9 +30,10 @@
 
 #include "zc_defs.h"
 
+
 extern int connections_no;
-extern int connections[20];
-extern phoenix_mem_t *zlog_mem_pool;
+extern int connections[];
+
 
 void zlog_rule_profile(zlog_rule_t * a_rule, int flag)
 {
@@ -469,21 +470,13 @@ static int zlog_rule_output_stdout(zlog_rule_t * a_rule,
 		return -1;
 	}
 
-//	ring_buf_add(ring_buffer, zlog_buf_str(a_thread->msg_buf),zlog_buf_len(a_thread->msg_buf), zlog_mem_pool);
-
-
 
 	if (write(STDOUT_FILENO,
 			zlog_buf_str(a_thread->msg_buf),zlog_buf_len(a_thread->msg_buf)) < 0) {
 		zc_error("write fail, errno[%d]", errno);
 		return -1;
 	}
-/*
-	if (write(STDOUT_FILENO,
-		zlog_buf_str(a_thread->msg_buf), zlog_buf_len(a_thread->msg_buf)) < 0) {
-		zc_error("write fail, errno[%d]", errno);
-		return -1;
-	}*/
+
 
 	return 0;
 }
@@ -496,14 +489,14 @@ static int zlog_rule_output_tcpout(zlog_rule_t * a_rule,
 		zc_error("zlog_format_gen_msg fail");
 		return -1;
 	}
-	ph_str msg = { zlog_buf_str(a_thread->msg_buf), zlog_buf_len(a_thread->msg_buf) };
-
 
 	for(int i=0 ; i < connections_no ; i++)
 	{
-
-		tcp_send(connections[i], msg);
-
+		if (write(connections[i],
+				  zlog_buf_str(a_thread->msg_buf),zlog_buf_len(a_thread->msg_buf)) < 0) {
+			zc_error("write fail, errno[%d]", errno);
+			return -1;
+		}
 
 
 	}
@@ -912,6 +905,7 @@ zlog_rule_t *zlog_rule_new(char *line,
 	case ':' :{
 
 				int counter = 1;
+
 				char IP[512];
 				char PORT[6];
 				int port=0;
@@ -919,7 +913,7 @@ zlog_rule_t *zlog_rule_new(char *line,
 				while(file_path[counter] != ':'){
 
 
-					if(counter > 15) //biggest possible ip address
+					if(counter > 15) //biggest possible ipv4 address
 					{
 						zc_error("[%s]error in the ip address for TCP log.", output);
 						goto err;
@@ -949,20 +943,10 @@ zlog_rule_t *zlog_rule_new(char *line,
 
 				port = atoi(PORT);
 
-				ph_acceptor_node_t * acceptor = mem_zalloc(zlog_mem_pool,sizeof(ph_acceptor_node_t));
-
-				acceptor->bind_ip_str = *(ph_str*) mem_zalloc(zlog_mem_pool,sizeof(ph_str));
-
-				charp_dup_str(&acceptor->bind_ip_str, IP, zlog_mem_pool);		//ToDo change all mem Pool in here to extern above
-
-				if (str_to_ip_address(acceptor->bind_ip_str, &acceptor->bind_ip) == 0) {
-				}
-				acceptor->type = ACCEPTOR_TYPE_TCP;
-				acceptor->port = port;
-
-				phl_append(&a_rule->tcp_srv.acceptors, acceptor);
-				a_rule->tcp_srv.htable_size =32;
-
+				a_rule->tcp_srv.bind_ip_str = malloc(strlen(IP)+2 * sizeof(char));
+				memcpy(a_rule->tcp_srv.bind_ip_str, IP, strlen(IP)+1);		//ToDo change all mem Pool in here to extern above
+				a_rule->tcp_srv.port = port;
+				a_rule->tcp_srv.htable_size = TCP_HTABLE_DEFAULT_SIZE;
 				a_rule->output = zlog_rule_output_tcpout;
 
 			break;}

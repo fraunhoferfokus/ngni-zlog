@@ -15,39 +15,33 @@ extern "C" {
 
 #include <stdarg.h> /* for va_list */
 #include <stdio.h> /* for size_t */
-#include "../../../utils/utils.h"
-
+#include <libxml/parser.h>
 # if defined __GNUC__
 #   define ZLOG_CHECK_PRINTF(m,n) __attribute__((format(printf,m,n)))
 # else 
 #   define ZLOG_CHECK_PRINTF(m,n)
 # endif
 
-#ifndef PHOENIX_MEM
-#define PHOENIX_MEM
-#endif
-
 typedef struct zlog_category_s zlog_category_t;
 
 int zlog_init(const char *confpath);
 int zlog_reload(const char *confpath);
-int zlog_ph_reload_cfg(void* zlog_cfg);	//zlog normal init have to be called first
-int zlog_ph_reload_xml(xmlNodePtr i);
-int zlog_ph_is_init();
+
+int zlog_feed_xml(xmlNodePtr xml_cfg);		//This supposed to do all the job from start to end	. Parse XML, create object, reload with created obj.
+void* zlog_get_obj(xmlNodePtr xml_ptr);
+int zlog_reload_with_obj(void* zlog_cfg);	//This is only reloading with created object.
 
 void zlog_fini(void);
 
 void zlog_profile(void);
 
-
-
 zlog_category_t *zlog_get_category(const char *cname);
 
 int zlog_put_mdc(const char *key, const char *value);
-char *zlog_get_mdc( char *key);
-void zlog_remove_mdc( char *key);
+char *zlog_get_mdc(const char *key);
+void zlog_remove_mdc(const char *key);
 void zlog_clean_mdc(void);
-void zlog_init_ring();
+
 void zlog(zlog_category_t * category,
 	const char *file, size_t filelen,
 	const char *func, size_t funclen,
@@ -79,14 +73,12 @@ void hdzlog(const char *file, size_t filelen,
 	const char *func, size_t funclen,
 	long line, int level,
 	const void *buf, size_t buflen);
-#ifndef MSG_ZLOG
-#define MSG_ZLOG
+
 typedef struct zlog_msg_s {
 	char *buf;
 	size_t len;
 	char *path;
 } zlog_msg_t;
-#endif
 
 typedef int (*zlog_record_fn)(zlog_msg_t *msg);
 int zlog_set_record(const char *rname, zlog_record_fn record);

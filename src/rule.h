@@ -22,13 +22,11 @@
 #include "thread.h"
 #include "rotater.h"
 #include "record.h"
-#include "../../../utils/sockets/acceptor.h"
 
 typedef struct zlog_rule_s zlog_rule_t;
 
 typedef int (*zlog_rule_output_fn) (zlog_rule_t * a_rule, zlog_thread_t * a_thread);
 
-int_list_t sockets;
 
 struct zlog_rule_s {
 
@@ -76,9 +74,9 @@ struct zlog_rule_s {
 	zlog_record_fn record_func;
 
 	struct {
-				uint32_t htable_size;
-	            ph_acceptor_list_t acceptors;
-	            int_list_t *socks;
+			  	 uint32_t htable_size;
+				 char* bind_ip_str;
+				 int port;
 
 			} tcp_srv;
 };
