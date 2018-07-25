@@ -224,17 +224,13 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section);
 int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 {
 	int rc = 0;
-	struct tm local_time;
 	int default_rule_init = 0;
 	char line[MAXLEN_CFG_LINE + 1];
-	size_t line_len;
 	char *pline = NULL;
-	char *p = NULL;
 	int line_no = 0;
-	int i = 0;
-	int in_quotation = 0;
 
 	int section = 0;
+
 	/* [global:1] [levels:2] [formats:3] [rules:4] */
 
 	/* Now process the file.
@@ -242,7 +238,6 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 	pline = line;
 	memset(&line, 0x00, sizeof(line));
 
-	long int l;
 	xmlChar	*xc = 0;
 	xmlNodePtr j=0;
 	for(j=xml_conf->children;j;j=j->next) {
@@ -726,7 +721,6 @@ zlog_conf_t *zlog_ph_conf(xmlNodePtr xml_conf)
 //	xmlNodePtr xml_conf = *(xmlNodePtr*)xml_conf_obj;
 
 
-	int nwrite = 0;
 	int has_conf_file = 0;
 	zlog_conf_t *a_conf = NULL;
 

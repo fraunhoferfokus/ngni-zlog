@@ -2,6 +2,8 @@
 # Copyright (C) 2010-2012 Hardy Simpson <HardySimpson1984@gmail.com>
 # This file is released under the LGPL 2.1 license, see the COPYING file
 
+#This zlog file was modified by Manar Zaboub. XML2 Library was included in the compiling flags.
+
 OBJ=    \
   buf.o    \
   category.o    \
@@ -34,9 +36,9 @@ CC:=$(shell sh -c 'type $(CC) >/dev/null 2>/dev/null && echo $(CC) || echo gcc')
 OPTIMIZATION?=-O2
 WARNINGS=-Wall -Wstrict-prototypes -fwrapv
 DEBUG?= -g -ggdb
-REAL_CFLAGS=$(OPTIMIZATION) -fPIC -pthread  $(CFLAGS) $(WARNINGS) $(DEBUG) -lxml2 -I/usr/include/libxml2
+REAL_CFLAGS=$(OPTIMIZATION) -fPIC -pthread  $(CFLAGS) $(WARNINGS) $(DEBUG) `xml2-config --cflags`
 
-REAL_LDFLAGS=$(LDFLAGS) -pthread
+REAL_LDFLAGS=$(LDFLAGS) -pthread `xml2-config --libs`
 BS=$(shell pkg-config --libs libxml-2.0)
 
 DYLIBSUFFIX=so

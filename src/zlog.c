@@ -27,16 +27,18 @@
 *	By Manar Zaboub
 *
 *****************************************/
-//TCP Deps .
-#include <sys/types.h>
+//TCP Dependencies.
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
+#include <arpa/inet.h>
+
 int connections_no = 0;
 int connections[TCP_HTABLE_DEFAULT_SIZE];
 int tcp_connection = 0;
 
-/*******************************************************************************/
+/*********Extending**********************************************************************/
+
+
 extern char *zlog_git_sha1;
 /*******************************************************************************/
 static pthread_rwlock_t zlog_env_lock = PTHREAD_RWLOCK_INITIALIZER;
@@ -1035,9 +1037,9 @@ void *connection_handler(void *t_rule)
 
 	int sockfd;
 	socklen_t clilen;
-	char buffer[256];
+//	char buffer[256];
 	struct sockaddr_in serv_addr, cli_addr;
-	int n;
+//	int n;
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0)
@@ -1046,6 +1048,7 @@ void *connection_handler(void *t_rule)
 
 	serv_addr.sin_family = AF_INET;
 	inet_pton(AF_INET, a_rule->tcp_srv.bind_ip_str, &(serv_addr.sin_addr));
+//	serv_addr.sin_addr.s_addr = htons(a_rule->tcp_srv.bind_ip_str);
 	serv_addr.sin_port = htons(a_rule->tcp_srv.port);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
@@ -1067,7 +1070,7 @@ void *connection_handler(void *t_rule)
 	int always_true = 1;
 
 	setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &always_true, sizeof(int));		//Close socket and make reusable.
-
+	return NULL;
 }
 int log_serv_connecion_start_listener(	zlog_rule_t *a_rule) {
 
