@@ -31,11 +31,11 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+int ph_init = 0;
 int connections_no = 0;
 int connections[TCP_HTABLE_DEFAULT_SIZE];
 int tcp_connection = 0;
-
+void finish_tcp_conn();
 /*********Extending**********************************************************************/
 
 
@@ -131,6 +131,7 @@ err:
 /*******************************************************************************/
 int zlog_init(const char *confpath)
 {
+	ph_init = 1;
 	int rc;
 	zc_debug("------zlog_init start------");
 	zc_debug("------compile time[%s %s], version[%s]------", __DATE__, __TIME__, ZLOG_VERSION);
@@ -316,8 +317,8 @@ quit:
 void zlog_fini(void)
 {
 	int rc = 0;
-	tcp_connection = 0;		//to close tcp socket
-
+	tcp_connection = 0;
+	finish_tcp_conn();	//
 	zc_debug("------zlog_fini start------");
 	rc = pthread_rwlock_wrlock(&zlog_env_lock);
 	if (rc) {
@@ -892,6 +893,11 @@ reload:
 void dzlog(const char *file, size_t filelen, const char *func, size_t funclen, long line, int level,
 	const char *format, ...)
 {
+	if(!zlog_env_is_init && ph_init)		//If phoenix stopped zlog and then tried calling a zlog function again
+	{	printf("ZLOG stopped by another program, can't print .\n");
+		return ;
+	}
+
 	zlog_thread_t *a_thread;
 	va_list args;
 
@@ -1031,15 +1037,22 @@ const char *zlog_version(void) { return ZLOG_VERSION; }
 *	By Manar Zaboub
 *
 *****************************************/
+void finish_tcp_conn()
+{
+	for(int i =0 ; i < connections_no ; i++) {
+
+		shutdown(connections[connections_no], SHUT_RDWR);
+
+	}
+
+}
 void *connection_handler(void *t_rule)
 {
 	zlog_rule_t* a_rule = (zlog_rule_t*) t_rule;
 
 	int sockfd;
 	socklen_t clilen;
-//	char buffer[256];
 	struct sockaddr_in serv_addr, cli_addr;
-//	int n;
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0)
@@ -1048,7 +1061,6 @@ void *connection_handler(void *t_rule)
 
 	serv_addr.sin_family = AF_INET;
 	inet_pton(AF_INET, a_rule->tcp_srv.bind_ip_str, &(serv_addr.sin_addr));
-//	serv_addr.sin_addr.s_addr = htons(a_rule->tcp_srv.bind_ip_str);
 	serv_addr.sin_port = htons(a_rule->tcp_srv.port);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)

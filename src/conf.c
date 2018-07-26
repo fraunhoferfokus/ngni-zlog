@@ -331,20 +331,19 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
 					xc = xmlGetProp(j,(xmlChar*)"pattern");
 
-					line[strlen(line)]='"';
+					char temp= ' ';
+					if(xc[0] != '"')
+						temp = '"';
 
-					int i = strlen(line) ; 		//here to replace / with %
+
+					memcpy(line+ strlen(line), &temp, 1);
 
 					memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
 
-					for ( ; i< strlen(line); i++)
-						if(line[i]=='/')
-							line[i]='%';
-
-					line[strlen(line)]='"';
-
+					memcpy(line+ strlen(line), &temp, 1);
 
 					break;
+
 				case 4:
 					xc = xmlGetProp(j,(xmlChar*)"category");
 
@@ -369,35 +368,11 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 					memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
 
 					break;
+		}
+			for ( int i=0 ; i< strlen(line); i++)	// replace not allowed characters.
+				if(line[i]=='$')
+					line[i]='%';
 
-					/*			case 5:
-
-                xc = xmlGetProp(i, (xmlChar*) "bind");
-
-
-                if(xc && strlen((char*)xc)){
-
-                phoenix_instance_cfg.log_cfg.acceptors.bind = (char*) xc;
-
-                if(xml_get_prop_as_int(i,(char*)"port",&l)){
-
-                }
-                    phoenix_instance_cfg.log_cfg.acceptors.port = l;
-
-                    xc = xmlGetProp(i, (xmlChar*) "type");
-
-                    if(xc)
-                        phoenix_instance_cfg.log_cfg.acceptors.type = (char*) xc;
-                    else
-                        phoenix_instance_cfg.log_cfg.acceptors.type = 0;
-
-
-                }
-                else{
-                    LOG_ERR("IP address for logging provided but port is missed.\n");
-                    return 0;
-                }
-*/		}
 			if(section<5)
 				rc = zlog_conf_parse_line(a_conf, line, &section);
 

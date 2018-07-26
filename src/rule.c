@@ -932,7 +932,7 @@ zlog_rule_t *zlog_rule_new(char *line,
 					counter++;
 					port_counter++;
 
-					if(port_counter > 6) //biggest possible ip address
+					if(port_counter > 5) //biggest possible ip address
 					{
 					zc_error("[%s]error in port for TCP log.", output);
 						goto err;
@@ -942,7 +942,11 @@ zlog_rule_t *zlog_rule_new(char *line,
 				PORT[port_counter]='\0';
 
 				port = atoi(PORT);
-
+				if(port<1024 || port > 65535)
+				{
+					zc_error("[%i]error in port for TCP log. Port not in allowed range limit.");
+					goto err;
+				}
 				a_rule->tcp_srv.bind_ip_str = malloc(strlen(IP)+2 * sizeof(char));
 				memcpy(a_rule->tcp_srv.bind_ip_str, IP, strlen(IP)+1);		//ToDo change all mem Pool in here to extern above
 				a_rule->tcp_srv.port = port;

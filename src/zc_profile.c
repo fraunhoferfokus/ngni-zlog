@@ -47,7 +47,6 @@ int zc_profile_inner(int flag, const char *file, const long line, const char *fm
 		debug_log = getenv("ZLOG_PROFILE_DEBUG");
 		error_log = getenv("ZLOG_PROFILE_ERROR");
 	}
-
 	switch (flag) {
 	case ZC_DEBUG:
  		if (debug_log == NULL) return 0;
@@ -64,11 +63,20 @@ int zc_profile_inner(int flag, const char *file, const long line, const char *fm
 		fprintf(fp, "%s WARN  (%d:%s:%ld) ", time_str, getpid(), file, line);
 		break;
 	case ZC_ERROR:
- 		if (error_log == NULL) return 0;
-		fp = fopen(error_log, "a");
-		if (!fp) return -1;
-		zc_time(time_str, sizeof(time_str));
-		fprintf(fp, "%s ERROR (%d:%s:%ld) ", time_str, getpid(), file, line);
+ 		if (error_log == NULL) {
+			printf("%s ERROR (%d:%s:%ld) ", time_str, getpid(), file, line);
+ 			va_start(args, fmt);
+			printf(fmt, args);
+			va_end(args);
+			printf("\n");
+ 			return 0;
+ 		}
+ 		else {
+			fp = fopen(error_log, "a");
+			if (!fp) return -1;
+			zc_time(time_str, sizeof(time_str));
+			fprintf(fp, "%s ERROR (%d:%s:%ld) ", time_str, getpid(), file, line);
+		}
 		break;
 	}
 
