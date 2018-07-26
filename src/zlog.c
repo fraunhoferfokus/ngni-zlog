@@ -474,6 +474,10 @@ err:
 /*******************************************************************************/
 int zlog_put_mdc(const char *key, const char *value)
 {
+	if(!zlog_env_is_init && ph_init)		//If phoenix stopped zlog and then tried calling a zlog function again
+	{//	zc_error("ZLOG stopped by phoenix, can't call ZLOG.");
+		return -1 ;
+	}
 	int rc = 0;
 	zlog_thread_t *a_thread;
 
@@ -890,16 +894,24 @@ reload:
 }
 
 /*******************************************************************************/
+
 void dzlog(const char *file, size_t filelen, const char *func, size_t funclen, long line, int level,
 	const char *format, ...)
 {
+	va_list args;
+
 	if(!zlog_env_is_init && ph_init)		//If phoenix stopped zlog and then tried calling a zlog function again
-	{	printf("ZLOG stopped by another program, can't print .\n");
+	{
+		va_start(args, format);
+		printf("ZLOG stopped by another program, couldn't print line :");
+		printf(format, args);
+		printf("\n");
+		va_end(args);
+
 		return ;
 	}
 
 	zlog_thread_t *a_thread;
-	va_list args;
 
 
 	pthread_rwlock_rdlock(&zlog_env_lock);
@@ -1100,7 +1112,7 @@ int log_serv_connecion_start_listener(	zlog_rule_t *a_rule) {
 int zlog_reload_with_obj(void* config)
 {
 
-
+		ph_init=1;
 		zlog_conf_t* new_conf = (zlog_conf_t*)config;
 		char* confpath="";
 		int rc = 0;

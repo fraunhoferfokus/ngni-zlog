@@ -27,7 +27,7 @@ typedef struct zlog_category_s zlog_category_t;
 int zlog_init(const char *confpath);
 int zlog_reload(const char *confpath);
 
-int zlog_feed_xml(xmlNodePtr xml_cfg);		//This supposed to do all the job from start to end	. Parse XML, create object, reload with created obj.
+int zlog_feed_xml(xmlNodePtr xml_cfg);		//This supposed to do all the job from start to end. Parse XML, create object, reload with created obj.
 void* zlog_get_obj(xmlNodePtr xml_ptr);
 int zlog_reload_with_obj(void* zlog_cfg);	//This is only reloading with created object.
 
