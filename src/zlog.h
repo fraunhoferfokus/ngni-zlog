@@ -61,7 +61,7 @@ void hzlog(zlog_category_t * category,
 int dzlog_init(const char *confpath, const char *cname);
 int dzlog_set_category(const char *cname);
 
-void dzlog(const char *file, size_t filelen,
+int dzlog(const char *file, size_t filelen,			//returned value changed to int to indicate errors.
 	const char *func, size_t funclen,
 	long line, int level,
 	const char *format, ...) ZLOG_CHECK_PRINTF(7,8);

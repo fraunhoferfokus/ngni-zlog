@@ -226,7 +226,6 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 	int rc = 0;
 	int default_rule_init = 0;
 	char line[MAXLEN_CFG_LINE + 1];
-	char *pline = NULL;
 	int line_no = 0;
 
 	int section = 0;
@@ -235,7 +234,6 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
 	/* Now process the file.
 	 */
-	pline = line;
 	memset(&line, 0x00, sizeof(line));
 
 	xmlChar	*xc = 0;

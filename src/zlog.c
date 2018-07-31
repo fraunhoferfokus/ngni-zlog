@@ -35,7 +35,7 @@ int ph_init = 0;
 int connections_no = 0;
 int connections[TCP_HTABLE_DEFAULT_SIZE];
 int tcp_connection = 0;
-void finish_tcp_conn();
+void finish_tcp_conn(void);
 /*********Extending**********************************************************************/
 
 
@@ -475,8 +475,7 @@ err:
 int zlog_put_mdc(const char *key, const char *value)
 {
 	if(!zlog_env_is_init && ph_init)		//If phoenix stopped zlog and then tried calling a zlog function again
-	{//	zc_error("ZLOG stopped by phoenix, can't call ZLOG.");
-		return -1 ;
+	{	return -1 ;
 	}
 	int rc = 0;
 	zlog_thread_t *a_thread;
@@ -895,20 +894,16 @@ reload:
 
 /*******************************************************************************/
 
-void dzlog(const char *file, size_t filelen, const char *func, size_t funclen, long line, int level,
+//return 1 on success.
+
+int dzlog(const char *file, size_t filelen, const char *func, size_t funclen, long line, int level,
 	const char *format, ...)
 {
 	va_list args;
 
-	if(!zlog_env_is_init && ph_init)		//If phoenix stopped zlog and then tried calling a zlog function again
+	if(!zlog_env_is_init && ph_init)		//If phoenix stopped zlog, then tried to call zlog again
 	{
-		va_start(args, format);
-		printf("ZLOG stopped by another program, couldn't print line :");
-		printf(format, args);
-		printf("\n");
-		va_end(args);
-
-		return ;
+		return 0;
 	}
 
 	zlog_thread_t *a_thread;
@@ -953,14 +948,14 @@ void dzlog(const char *file, size_t filelen, const char *func, size_t funclen, l
 
 exit:
 	pthread_rwlock_unlock(&zlog_env_lock);
-	return;
+	return 1;
 reload:
 	pthread_rwlock_unlock(&zlog_env_lock);
 	/* will be wrlock, so after unlock */
 	if (zlog_reload((char *)-1)) {
 		zc_error("reach reload-conf-period but zlog_reload fail, zlog-chk-conf [file] see detail");
 	}
-	return;
+	return 1;
 }
 
 /*******************************************************************************/
