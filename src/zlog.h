@@ -26,6 +26,9 @@ typedef struct zlog_category_s zlog_category_t;
 
 int zlog_init(const char *confpath);
 int zlog_reload(const char *confpath);
+#ifndef PH_DEFAULT
+#define PH_DEFAULT
+#endif
 
 int zlog_feed_xml(xmlNodePtr xml_cfg);		//This supposed to do all the job from start to end. Parse XML, create object, reload with created obj.
 void* zlog_get_obj(xmlNodePtr xml_ptr);

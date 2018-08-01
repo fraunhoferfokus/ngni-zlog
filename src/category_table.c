@@ -13,6 +13,8 @@
 #include "zc_defs.h"
 #include "category_table.h"
 
+#define PH_DEFAULT_CATEGORY  "ph_default"
+
 void zlog_category_table_profile(zc_hashtable_t * categories, int flag)
 {
 	zc_hashtable_entry_t *a_entry;
@@ -105,15 +107,23 @@ zlog_category_t *zlog_category_table_fetch_category(zc_hashtable_t * categories,
 	zc_assert(categories, NULL);
 
 	/* 1st find category in global category map */
-	a_category = zc_hashtable_get(categories, category_name);
-	if (a_category) return a_category;
 
+	a_category = zc_hashtable_get(categories, category_name);
+	if (a_category)
+    	return a_category;
+	else {
+	    printf("%s PH DEFAULT IS \n", PH_DEFAULT_CATEGORY);
+		a_category = zc_hashtable_get(categories, PH_DEFAULT_CATEGORY);
+		if (a_category)
+		    return a_category;
+	}
 	/* else not fount, create one */
 	a_category = zlog_category_new(category_name, rules);
 	if (!a_category) {
 		zc_error("zc_category_new fail");
 		return NULL;
 	}
+
 
 	if(zc_hashtable_put(categories, a_category->name, a_category)) {
 		zc_error("zc_hashtable_put fail");

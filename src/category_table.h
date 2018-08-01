@@ -12,6 +12,7 @@
 #include "zc_defs.h"
 #include "category.h"
 
+
 zc_hashtable_t *zlog_category_table_new(void);
 void zlog_category_table_del(zc_hashtable_t * categories);
 void zlog_category_table_profile(zc_hashtable_t * categories, int flag);
