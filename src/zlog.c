@@ -928,6 +928,7 @@ int dzlog(const char *file, size_t filelen, const char *func, size_t funclen, lo
 	zlog_fetch_thread(a_thread, exit);
 
 	va_start(args, format);
+
 	zlog_event_set_fmt(a_thread->event,
 		zlog_default_category->name, zlog_default_category->name_len,
 		file, filelen, func, funclen, line, level,
@@ -938,7 +939,8 @@ int dzlog(const char *file, size_t filelen, const char *func, size_t funclen, lo
 		va_end(args);
 		goto exit;
 	}
-	va_end(args);
+
+    va_end(args);
 
 	if (zlog_env_conf->reload_conf_period &&
 		++zlog_env_reload_conf_count > zlog_env_conf->reload_conf_period ) {

@@ -27,17 +27,14 @@
 /*******************************************************************************/
 #ifndef CONSTANTS_DEFAULT
 #define CONSTANTS_DEFAULT
-//#define ZLOG_CONF_DEFAULT_FORMAT "default = \"%D %V [%p:%F:%L] %m%n\""
-#define ZLOG_CONF_DEFAULT_FORMAT "default = \"%M(carriage)%T/%M(sysid)(%p) %d(%T) %x %M(levelid):%M(log_block):%M(function)():%M(lineno)> %m\""
-#define ZLOG_CONF_DEFAULT_RULE "*.*        >stdout"
+#define ZLOG_CONF_DEFAULT_FORMAT "ph_default_format = \"%M(carriage)%T/%M(sysid)(%p) %d(%T) %x %M(levelid):%M(log_block):%M(function)():%M(lineno)> %m\""
+#define ZLOG_CONF_DEFAULT_RULE "ph_default_category.*        >stdout"
 #define ZLOG_CONF_DEFAULT_BUF_SIZE_MIN 1024
 #define ZLOG_CONF_DEFAULT_BUF_SIZE_MAX (2 * 1024 * 1024)
 #define ZLOG_CONF_DEFAULT_FILE_PERMS 0600
 #define ZLOG_CONF_DEFAULT_RELOAD_CONF_PERIOD 0
 #define ZLOG_CONF_DEFAULT_FSYNC_PERIOD 0
 #define ZLOG_CONF_BACKUP_ROTATE_LOCK_FILE "/tmp/zlog.lock"
-
-#define ZLOG_CONF_DEFAULT_RULE_LINE "ph_default.*        >stdout; default"
 
 #endif
 /*******************************************************************************/
@@ -232,7 +229,37 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 	char line[MAXLEN_CFG_LINE + 1];
 	int line_no = 0;
 
-	int section = 0;
+	int section = 3;
+
+	zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_FORMAT, &section);
+
+	section = 4;
+	if(!default_rule_init)
+	{
+	    if (a_conf->reload_conf_period != 0
+		 && a_conf->fsync_period >= a_conf->reload_conf_period) {
+			zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
+					"set fsync_period to zero");
+			a_conf->fsync_period = 0;
+		}
+
+		a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
+		if (!a_conf->rotater) {
+			zc_error("zlog_rotater_new fail");
+			return -1;
+		}
+
+		a_conf->default_format = zlog_format_new(a_conf->default_format_line,
+												 &(a_conf->time_cache_count));
+		if (!a_conf->default_format) {
+			zc_error("zlog_format_new fail");
+			return -1;
+		}
+		default_rule_init=1;
+	}
+	zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
+
+
 
 	/* [global:1] [levels:2] [formats:3] [rules:4] */
 
@@ -254,35 +281,7 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 			else if(strcasecmp((char*)j->name,"Rule")==0){
 				section = 4;
 				if(!default_rule_init)
-				{if (a_conf->reload_conf_period != 0
-					 && a_conf->fsync_period >= a_conf->reload_conf_period) {
-						/* as all rule will be rebuilt when conf is reload,
-						 * so fsync_period > reload_conf_period will never
-						 * cause rule to fsync it's file.
-						 * fsync_period will be meaningless and down speed,
-						 * so make it zero.
-						 */
-						zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
-								"set fsync_period to zero");
-						a_conf->fsync_period = 0;
-					}
-
-					/* now build rotater and default_format
-					 * from the unchanging global setting,
-					 * for zlog_rule_new() */
-					a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
-					if (!a_conf->rotater) {
-						zc_error("zlog_rotater_new fail");
-						return -1;
-					}
-
-					a_conf->default_format = zlog_format_new(a_conf->default_format_line,
-															 &(a_conf->time_cache_count));
-					if (!a_conf->default_format) {
-						zc_error("zlog_format_new fail");
-						return -1;
-					}
-					default_rule_init=1;
+				{
 				}
 
 			}
