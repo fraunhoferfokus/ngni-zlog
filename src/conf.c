@@ -28,14 +28,15 @@
 #ifndef CONSTANTS_DEFAULT
 #define CONSTANTS_DEFAULT
 #define ZLOG_CONF_DEFAULT_FORMAT "ph_default_format = \"%M(carriage)%T/%M(sysid)(%p) %d(%T) %x %M(levelid):%M(log_block):%M(function)():%M(lineno)> %m\""
-#define ZLOG_CONF_DEFAULT_RULE "ph_default_category.*        >stdout"
+#define ZLOG_CONF_DEFAULT_RULE "ph_default_category.*        >stdout"   //Default rule is for all the log_blocks
+#define ZLOG_CONF_STDOUT_RULE "stdout_category.*         >stdout"    //stdout for all modules need to only output to stdout. like prompt function
+
 #define ZLOG_CONF_DEFAULT_BUF_SIZE_MIN 1024
 #define ZLOG_CONF_DEFAULT_BUF_SIZE_MAX (2 * 1024 * 1024)
 #define ZLOG_CONF_DEFAULT_FILE_PERMS 0600
 #define ZLOG_CONF_DEFAULT_RELOAD_CONF_PERIOD 0
 #define ZLOG_CONF_DEFAULT_FSYNC_PERIOD 0
 #define ZLOG_CONF_BACKUP_ROTATE_LOCK_FILE "/tmp/zlog.lock"
-
 #endif
 /*******************************************************************************/
 
@@ -229,37 +230,14 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 	char line[MAXLEN_CFG_LINE + 1];
 	int line_no = 0;
 
-	int section = 3;
+	int section = 0;
 
-	zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_FORMAT, &section);
+    char str[] = ZLOG_CONF_DEFAULT_RULE;  //To check if default rule defined by user.
+    const char deli[] = ".";
+    char *def_rule_name;
+    def_rule_name = strtok(str, deli);
 
-	section = 4;
-	if(!default_rule_init)
-	{
-	    if (a_conf->reload_conf_period != 0
-		 && a_conf->fsync_period >= a_conf->reload_conf_period) {
-			zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
-					"set fsync_period to zero");
-			a_conf->fsync_period = 0;
-		}
-
-		a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
-		if (!a_conf->rotater) {
-			zc_error("zlog_rotater_new fail");
-			return -1;
-		}
-
-		a_conf->default_format = zlog_format_new(a_conf->default_format_line,
-												 &(a_conf->time_cache_count));
-		if (!a_conf->default_format) {
-			zc_error("zlog_format_new fail");
-			return -1;
-		}
-		default_rule_init=1;
-	}
-	zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
-
-
+	int def_rule_parsed = 0;
 
 	/* [global:1] [levels:2] [formats:3] [rules:4] */
 
@@ -282,8 +260,27 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 				section = 4;
 				if(!default_rule_init)
 				{
-				}
+					if (a_conf->reload_conf_period != 0
+						&& a_conf->fsync_period >= a_conf->reload_conf_period) {
+						zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
+								"set fsync_period to zero");
+						a_conf->fsync_period = 0;
+					}
 
+					a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
+					if (!a_conf->rotater) {
+						zc_error("zlog_rotater_new fail");
+						return -1;
+					}
+
+					a_conf->default_format = zlog_format_new(a_conf->default_format_line,
+															 &(a_conf->time_cache_count));
+					if (!a_conf->default_format) {
+						zc_error("zlog_format_new fail");
+						return -1;
+					}
+					default_rule_init=1;
+				}
 			}
 			switch(section)
 			{
@@ -349,6 +346,9 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 				case 4:
 					xc = xmlGetProp(j,(xmlChar*)"category");
 
+					if ( def_rule_name && strcmp((char*)xc, def_rule_name) == 0)
+						def_rule_parsed = 1;
+
 					memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
 
 					line[strlen(line)]='.';
@@ -394,7 +394,46 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
 
 	}
-	return rc;
+	section = 3;						//Parse default stuff
+
+	zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_FORMAT, &section);
+
+    section = 4;
+
+    if(!default_rule_init)      //Check again if
+    {
+        zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
+
+        if (a_conf->reload_conf_period != 0
+            && a_conf->fsync_period >= a_conf->reload_conf_period) {
+            zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
+                    "set fsync_period to zero");
+            a_conf->fsync_period = 0;
+        }
+
+        a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
+        if (!a_conf->rotater) {
+            zc_error("zlog_rotater_new fail");
+            return -1;
+        }
+
+        a_conf->default_format = zlog_format_new(a_conf->default_format_line,
+                                                 &(a_conf->time_cache_count));
+        if (!a_conf->default_format) {
+            zc_error("zlog_format_new fail");
+            return -1;
+        }
+        default_rule_init=1;
+    }
+
+    if(!def_rule_parsed)        //If default config not defined
+        zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
+
+    zlog_conf_parse_line(a_conf, ZLOG_CONF_STDOUT_RULE , &section); //Stdout have to be always present.
+
+
+
+    return rc;
 
 	exit:
 	return rc;
