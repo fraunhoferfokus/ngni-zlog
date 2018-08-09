@@ -402,7 +402,6 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
     if(!default_rule_init)      //Check again if
     {
-        zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
 
         if (a_conf->reload_conf_period != 0
             && a_conf->fsync_period >= a_conf->reload_conf_period) {
