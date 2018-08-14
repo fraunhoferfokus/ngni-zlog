@@ -869,6 +869,7 @@ zlog_rule_t *zlog_rule_new(char *line,
 			a_rule->static_ino = stb.st_ino;
 		}
 		break;
+
 	case '|' :
 		a_rule->pipe_fp = popen(output + 1, "w");
 		if (!a_rule->pipe_fp) {
@@ -902,6 +903,30 @@ zlog_rule_t *zlog_rule_new(char *line,
 				goto err;
 			}
 			break;
+	case 's' :
+		if (STRNCMP(file_path , ==, "syslog", 6)) {
+			a_rule->syslog_facility = syslog_facility_atoi(file_limit);
+			if (a_rule->syslog_facility == -187) {
+				zc_error("-187 get");
+				goto err;
+			}
+			a_rule->output = zlog_rule_output_syslog;
+			openlog(NULL, LOG_NDELAY | LOG_NOWAIT | LOG_PID, LOG_USER);
+            break;
+
+        } else if (STRNCMP(file_path , ==, "stdout", 6)) {
+			a_rule->output = zlog_rule_output_stdout;
+            break;
+
+        } else if (STRNCMP(file_path , ==, "stderr", 6)) {
+			a_rule->output = zlog_rule_output_stderr;
+            break;
+
+        }
+		else {
+			zc_error
+					("[%s]the string begins with s and is not syslog, stdout or stderr. Continue with switch statement", output);
+		}
 	case ':' :{
 
 				int counter = 1;

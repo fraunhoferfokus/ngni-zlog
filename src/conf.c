@@ -196,8 +196,7 @@ static int zlog_conf_build_without_file(zlog_conf_t * a_conf)
 		zc_error("zlog_rotater_new fail");
 		return -1;
 	}
-
-	default_rule = zlog_rule_new(
+    default_rule = zlog_rule_new(
 			ZLOG_CONF_DEFAULT_RULE,
 			a_conf->levels,
 			a_conf->default_format,
@@ -239,12 +238,12 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
 	int def_rule_parsed = 0;
 
-	/* [global:1] [levels:2] [formats:3] [rules:4] */
+    section = 3;						//Parse default format
 
-	/* Now process the file.
-	 */
+    zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_FORMAT, &section);
 
-	memset(&line, 0x00, sizeof(line));
+
+    memset(&line, 0x00, sizeof(line));
 
 	xmlChar	*xc = 0;
 	xmlNodePtr j=0;
@@ -363,6 +362,9 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
 					memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
 
+					if(line[strlen(line)-1]!=';')
+                        line[strlen(line)]= ';';
+
 					xc = xmlGetProp(j,(xmlChar*)"format");
 
 					line[strlen(line)]=' ';
@@ -394,15 +396,11 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
 
 	}
-	section = 3;						//Parse default stuff
-
-	zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_FORMAT, &section);
 
     section = 4;
 
-    if(!default_rule_init)      //Check again if
+    if(!default_rule_init)      //Check again if default rule parsed
     {
-        zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
 
         if (a_conf->reload_conf_period != 0
             && a_conf->fsync_period >= a_conf->reload_conf_period) {
@@ -424,12 +422,13 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
             return -1;
         }
         default_rule_init=1;
+
     }
 
     if(!def_rule_parsed)        //If default config not defined
-        zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
-
-    zlog_conf_parse_line(a_conf, ZLOG_CONF_STDOUT_RULE , &section); //Stdout have to be always present.
+    {        zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
+    }
+    zlog_conf_parse_line(a_conf, ZLOG_CONF_STDOUT_RULE , &section); //stdout have to be always present.
 
 
 
