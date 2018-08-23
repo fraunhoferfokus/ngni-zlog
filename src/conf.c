@@ -221,11 +221,7 @@ static int zlog_conf_build_without_file(zlog_conf_t * a_conf)
 /*******************************************************************************/
 static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section);
 
-void add_quotation_to_line(char line[])
-{
-    printf("IS IT COMING HERE\n");
 
-}
 int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 {
     int rc = 0;
@@ -365,7 +361,7 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
                     xc = xmlGetProp(j,(xmlChar*)"output");
 
-                    int i =0 , y = 0, z=0;
+                    unsigned int i =0 , y = 0, z=0;
                     if(xc[0]=='/' || (xc[0]=='.' && xc[1]=='/'))      //If not begining with double quotation then add them.
                     {    line[strlen(line)]='"';
 
@@ -385,25 +381,21 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
                         memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
                         z = 1;
                     }
-                    printf("line value first iter %s\n ", line);
-                    printf("debugging values %i and %i for strlen\n ", y, strlen((char*)xc));
-                    if(!z){
+                     if(!z){
                     int new_counter = 0;
-                    int i_2;
-                    for (y ; y < strlen(xc) && i_2!=-1 ; ++y) {
+                    int i_2=0;
+                    for ( ; y < strlen((char*)xc) && i_2!=-1 ; ++y) {
                         if ((xc[y] == '/' || (xc[y] == '.' && xc[y + 1] == '/')) && (xc[y - 1] != '"' && (y + 1 < strlen((char *) xc)) && xc[y + 1] !='"'))  //If not begining with double quotation then add them.
                         {
 
                             memcpy(line + strlen(line), (char *) xc + i, new_counter);
-                            printf("line value second mem %s\n ", line);
 
                             line[strlen(line)] = '"';
                             i_2 = y;
-                            for (i_2; i_2 < strlen((char *) xc); ++i_2) {            //And close the quotation here
-                                if (xc[i_2] == ' ' || xc[i] == ',' || (i_2 == strlen((char *) xc) - 1)&& xc[i_2]!='"') {
+                            for (; i_2 < strlen((char *) xc); ++i_2) {            //And close the quotation here
+                                if (xc[i_2] == ' ' || xc[i] == ',' || ((i_2 == strlen((char *) xc) - 1) && xc[i_2]!='"')) {
 
                                     memcpy(line + strlen(line), (char *) xc+y, i_2 + 1);
-                                    printf("line finally second mem and y is %s \n", line);
 
                                     line[strlen(line)] = '"';
                                     i_2=-1;
