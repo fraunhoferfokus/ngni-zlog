@@ -368,7 +368,7 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
                         for (i = 0; i < strlen((char *) xc) ; ++i) {            //And close the quotation here
                             if(xc[i]==' ' || xc[i]==',' || i == strlen((char *) xc)-1) {
 
-                                memcpy(line + strlen(line), (char *) xc, i);
+                                memcpy(line + strlen(line), (char *) xc, i+1);
                                 line[strlen(line)]='"';
                                 y=i;
                                 break;
