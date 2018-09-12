@@ -625,12 +625,13 @@ int zlog_ph_conf_build_with_json(zlog_conf_t * a_conf, yajl_val nodeptr, char** 
 
                 case 1:
 
-                    memset(&line, 0x00, sizeof(line));
 
 
                     pointer_node = nodeptr->u.object.values[ i ];
 
                     for (int j =0 ; j < pointer_node->u.array.len ; j++) {
+
+                        memset(&line, 0x00, sizeof(line));
 
                         object_node = pointer_node->u.array.values[j];
 
@@ -681,12 +682,13 @@ int zlog_ph_conf_build_with_json(zlog_conf_t * a_conf, yajl_val nodeptr, char** 
                 case 2:
 
 
-                    memset(&line, 0x00, sizeof(line));
 
                     pointer_node = nodeptr->u.object.values[ i ];
 
                     for (int j =0 ; j < pointer_node->u.array.len ; j++)
                     {
+                        memset(&line, 0x00, sizeof(line));
+
                         object_node =   pointer_node->u.array.values[j];
 
 
@@ -735,13 +737,14 @@ int zlog_ph_conf_build_with_json(zlog_conf_t * a_conf, yajl_val nodeptr, char** 
 
                 case 3:
 
-                    memset(&line, 0x00, sizeof(line));
 
 
                     pointer_node = nodeptr->u.object.values[ i ];
 
                     for (int j =0 ; j < pointer_node->u.array.len ; j++)
                     {
+                        memset(&line, 0x00, sizeof(line));
+
                         object_node  =   pointer_node->u.array.values[j];
 
                      xc = get_string_by_key(object_node, "name");
@@ -800,14 +803,16 @@ int zlog_ph_conf_build_with_json(zlog_conf_t * a_conf, yajl_val nodeptr, char** 
 
                 case 4:
 
-                    memset(&line, 0x00, sizeof(line));
 
 
                     pointer_node = nodeptr->u.object.values[ i ];
 
                     for (int j =0 ; j < pointer_node->u.array.len ; j++)
                     {
+                        memset(&line, 0x00, sizeof(line));
+
                         object_node =   pointer_node->u.array.values[j];
+
                     xc = get_string_by_key(object_node, "category");
                     if(!xc)
                         return -1;
