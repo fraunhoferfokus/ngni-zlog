@@ -16,6 +16,8 @@ extern "C" {
 #include <stdarg.h> /* for va_list */
 #include <stdio.h> /* for size_t */
 #include <libxml/parser.h>
+#include <yajl/yajl_tree.h>
+
 # if defined __GNUC__
 #   define ZLOG_CHECK_PRINTF(m,n) __attribute__((format(printf,m,n)))
 # else 
@@ -31,7 +33,9 @@ int zlog_reload(const char *confpath);
 #endif
 
 int zlog_feed_xml(xmlNodePtr xml_cfg);		//This supposed to do all the job from start to end. Parse XML, create object, reload with created obj.
-void* zlog_get_obj(xmlNodePtr xml_ptr);
+void* zlog_get_obj(yajl_val ptr, char** path);
+void* zlog_get_obj_xml(xmlNodePtr xml_ptr);
+
 int zlog_reload_with_obj(void* zlog_cfg);	//This is only reloading with created object.
 
 void zlog_fini(void);

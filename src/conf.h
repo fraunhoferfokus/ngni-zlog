@@ -15,6 +15,7 @@
 #include <libxml/parser.h>
 #include <libxml/xmlmemory.h>
 #include <libxml/xmlreader.h>
+#include <yajl/yajl_tree.h>
 
 typedef struct zlog_conf_s {
 	char file[MAXLEN_PATH + 1];
@@ -44,8 +45,9 @@ extern zlog_conf_t * zlog_env_conf;
 
 zlog_conf_t *zlog_conf_new(const char *confpath);
 
-zlog_conf_t *zlog_ph_conf(xmlNodePtr xml_conf_obj);	// Extending library function
-		
+zlog_conf_t *zlog_ph_conf(yajl_val conf_obj , char** path);	// Extending library function. xml_conf_obj = 0 if xml, 1 if json. Path if json object.
+zlog_conf_t *zlog_ph_conf_xml(xmlNodePtr conf_obj);
+
 
 void zlog_conf_del(zlog_conf_t * a_conf);
 void zlog_conf_profile(zlog_conf_t * a_conf, int flag);

@@ -344,7 +344,280 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
                     break;
 
                 case 4:
-                    xc = xmlGetProp(j,(xmlChar*)"category");
+                    xc = xmlGetProp(j,(xmlChar*)"log_block");
+
+                    if ( def_rule_name && strcmp((char*)xc, def_rule_name) == 0)
+                        def_rule_parsed = 1;
+
+                    memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
+
+                    line[strlen(line)]='.';
+
+                    xc = xmlGetProp(j,(xmlChar*)"level");
+
+                    memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
+
+                    line[strlen(line)]=' ';
+
+                    xc = xmlGetProp(j,(xmlChar*)"output");
+
+                    unsigned int i =0 , y = 0, z=0;
+                    if(xc[0]=='/' || (xc[0]=='.' && xc[1]=='/'))      //If not begining with double quotation then add them.
+                    {    line[strlen(line)]='"';
+
+                        for (i = 0; i < strlen((char *) xc) ; ++i) {            //And close the quotation here
+                            if(xc[i]==' ' || xc[i]==',' || i == strlen((char *) xc)-1) {
+
+                                memcpy(line + strlen(line), (char *) xc, i+1);
+                                line[strlen(line)]='"';
+                                y=i;
+                                break;
+
+                            }
+                        }
+                    }
+                    else
+                    {
+                        memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
+                        z = 1;
+                    }
+                     if(!z){
+                    int new_counter = 0;
+                    int i_2=0;
+                    for ( ; y < strlen((char*)xc) && i_2!=-1 ; ++y) {
+                        if ((xc[y] == '/' || (xc[y] == '.' && xc[y + 1] == '/')) && (xc[y - 1] != '"' && (y + 1 < strlen((char *) xc)) && xc[y + 1] !='"'))  //If not begining with double quotation then add them.
+                        {
+
+                            memcpy(line + strlen(line), (char *) xc + i, new_counter);
+
+                            line[strlen(line)] = '"';
+                            i_2 = y;
+                            for (; i_2 < strlen((char *) xc); ++i_2) {            //And close the quotation here
+                                if (xc[i_2] == ' ' || xc[i] == ',' || ((i_2 == strlen((char *) xc) - 1) && xc[i_2]!='"')) {
+
+                                    memcpy(line + strlen(line), (char *) xc+y, i_2 + 1);
+
+                                    line[strlen(line)] = '"';
+                                    i_2=-1;
+                                    break;
+
+                                }
+                                y++;
+
+
+                            }
+                        }
+                        new_counter++;
+                    }
+                    }
+                    if(line[strlen(line)-1]!=';')
+                        line[strlen(line)]= ';';
+
+                    xc = xmlGetProp(j,(xmlChar*)"format");
+
+                    line[strlen(line)]=' ';
+
+                    memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
+
+                    break;
+            }
+            for ( int i=0 ; i< strlen(line); i++)	// replace  inallowed characters.
+                if(line[i]=='$')		//In phoenix (xml) %s is reserved
+                    line[i]='%';
+
+
+
+            //line = &output;
+
+            if(section<5)
+                rc = zlog_conf_parse_line(a_conf, line, &section);
+
+            if (rc < 0) {
+                zc_error("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
+                zc_error("line[%s]", line);
+                goto exit;
+            } else if (rc > 0) {
+                zc_warn("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
+                zc_warn("line[%s]", line);
+                zc_warn("as strict init is set to false, ignore and go on");
+                rc = 0;
+                continue;
+            }
+
+        }
+
+
+    }
+
+    section = 4;
+
+    if(!default_rule_init)      //Check again if default rule parsed
+    {
+
+        if (a_conf->reload_conf_period != 0
+            && a_conf->fsync_period >= a_conf->reload_conf_period) {
+            zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
+                    "set fsync_period to zero");
+            a_conf->fsync_period = 0;
+        }
+
+        a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
+        if (!a_conf->rotater) {
+            zc_error("zlog_rotater_new fail");
+            return -1;
+        }
+
+        a_conf->default_format = zlog_format_new(a_conf->default_format_line,
+                                                 &(a_conf->time_cache_count));
+        if (!a_conf->default_format) {
+            zc_error("zlog_format_new fail");
+            return -1;
+        }
+        default_rule_init=1;
+
+    }
+
+    if(!def_rule_parsed)        //If default config not defined
+    {        zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
+    }
+    zlog_conf_parse_line(a_conf, ZLOG_CONF_STDOUT_RULE , &section); //stdout have to be always present.
+
+
+
+    return rc;
+
+    exit:
+    return rc;
+}
+int zlog_ph_conf_build_with_json(zlog_conf_t * a_conf, yajl_val node, char** path )
+{
+    yajl_val nodeptr=node,val=0,object_node=0;
+    size_t modelen;
+    const char *newpath[10]={},*key;
+    char *type,*string;
+
+
+    int rc = 0;
+    int default_rule_init = 0;
+    char line[MAXLEN_CFG_LINE + 1];
+    int line_no = 0;
+
+    int section = 0;
+
+    char str[] = ZLOG_CONF_DEFAULT_RULE;  //To check if default rule defined by user.
+    const char deli[] = ".";
+    char *def_rule_name;
+    def_rule_name = strtok(str, deli);
+
+    int def_rule_parsed = 0;
+
+    section = 3;						//Parse default format
+
+    zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_FORMAT, &section);
+
+
+    memset(&line, 0x00, sizeof(line));
+/**
+    xmlChar	*xc = 0;
+    xmlNodePtr j=0;
+    for(j=xml_conf->children;j;j=j->next) {
+        if (j->type==XML_ELEMENT_NODE){
+
+            memset(&line, 0x00, sizeof(line));
+
+            if (strcasecmp((char*)j->name,"Global")==0){section = 1;}
+            else if(strcasecmp((char*)j->name,"Level")==0){section = 2;}
+            else if(strcasecmp((char*)j->name,"Format")==0){section = 3;}
+            else if(strcasecmp((char*)j->name,"Rule")==0){
+                section = 4;
+                if(!default_rule_init)
+                {
+                    if (a_conf->reload_conf_period != 0
+                        && a_conf->fsync_period >= a_conf->reload_conf_period) {
+                        zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
+                                "set fsync_period to zero");
+                        a_conf->fsync_period = 0;
+                    }
+
+                    a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
+                    if (!a_conf->rotater) {
+                        zc_error("zlog_rotater_new fail");
+                        return -1;
+                    }
+
+                    a_conf->default_format = zlog_format_new(a_conf->default_format_line,
+                                                             &(a_conf->time_cache_count));
+                    if (!a_conf->default_format) {
+                        zc_error("zlog_format_new fail");
+                        return -1;
+                    }
+                    default_rule_init=1;
+                }
+            }
+            switch(section)
+            {
+
+                case 1:
+
+                    xc = xmlGetProp(j,(xmlChar*) "key");
+
+                    memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
+
+                    memcpy(line+ strlen(line), " = ", 3);
+
+                    xc = xmlGetProp(j,(xmlChar*) "value");
+
+                    line[strlen(line)]=' ';
+
+                    memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
+
+
+                    break;
+
+
+                case 2:
+
+                    xc = xmlGetProp(j,(xmlChar*)"level");
+
+                    memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
+
+                    memcpy(line+ strlen(line), " = ", 3);
+
+                    xc = xmlGetProp(j,(xmlChar*)"value");
+
+                    line[strlen(line)]=' ';
+
+                    memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
+
+
+
+                    break;
+                case 3:
+
+                    xc = xmlGetProp(j,(xmlChar*)"name");
+
+                    memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
+
+                    memcpy(line+ strlen(line), " = ", 3);
+
+                    xc = xmlGetProp(j,(xmlChar*)"pattern");
+
+                    char temp= ' ';
+
+                    if(xc[0] != '"')
+                        temp = '"';
+
+
+                    memcpy(line+ strlen(line), &temp, 1);
+
+                    memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
+
+                    memcpy(line+ strlen(line), &temp, 1);
+
+                    break;
+
+                case 4:
+                    xc = xmlGetProp(j,(xmlChar*)"log_block");
 
                     if ( def_rule_name && strcmp((char*)xc, def_rule_name) == 0)
                         def_rule_parsed = 1;
@@ -482,486 +755,7 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
     }
     zlog_conf_parse_line(a_conf, ZLOG_CONF_STDOUT_RULE , &section); //stdout have to be always present.
 
-
-
-    return rc;
-
-    exit:
-    return rc;
-}
-int array_len(char *s[]){
-    int i=0;
-    while(s[i]!=(char *)'\0'){
-        i++;
-
-    }
-    return i;
-}
-void add_element(char* s[], const char* c) {
-    int len = array_len(s);
-    if(len != 0){
-        s[len]=(char *)c;
-    }
-    else{
-        s[len]=(char *)c;
-    }
-}
-void remove_element(char* s[]){
-
-    int len=array_len(s);
-    s[len-1]=(char *)'\0';
-
-}
-
-char* get_string_by_key(yajl_val yajl_pointer, char* key)
-{
-
-
-    size_t objlen = yajl_pointer->u.object.len;
-    for(int j=0 ; j<objlen ; j++) {
-
-        if (strcmp(key, yajl_pointer->u.object.keys[j]) == 0) {
-
-            yajl_val val = yajl_pointer->u.object.values[j];
-
-
-            if (YAJL_IS_STRING(val)) {
-
-                return YAJL_GET_STRING(val);
-                }
-
-
-        }
-    }
-
-    return 0;
-
-}
-
-
-int zlog_ph_conf_build_with_json(zlog_conf_t * a_conf, yajl_val nodeptr, char** path )
-{
-    yajl_val pointer_node,object_node=0;
-    char* xc = "";
-
-    int rc = 0;
-    int default_rule_init = 0;
-    char line[MAXLEN_CFG_LINE + 1];
-    int line_no = 0;
-
-    int section = 0;
-
-    char str[] = ZLOG_CONF_DEFAULT_RULE;  //To check if default rule defined by user.
-    const char deli[] = ".";
-    char *def_rule_name;
-    def_rule_name = strtok(str, deli);
-
-    int def_rule_parsed = 0;
-
-    section = 3;						//Parse default format
-
-    zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_FORMAT, &section);
-
-
-    memset(&line, 0x00, sizeof(line));
-
-    nodeptr = yajl_tree_get(nodeptr, (const char**)path, yajl_t_object );
-
-    if(nodeptr)
-    {
-        size_t len = nodeptr->u.object.len;
-
-        for(int i=0;i<len;i++){
-
-            const char * key = nodeptr->u.object.keys[ i ];
-
-            if (strcmp(key,"Global") == 0){
-                section = 1;
-
-            }
-            else  if (strcmp(key,"Level") == 0){
-                section = 2;
-
-            }
-            else if (strcmp(key,"Format") == 0){
-                section = 3;
-
-            }
-            else if (strcmp(key,"Rule") == 0){
-                section = 4;
-                if(!default_rule_init)
-                {
-                    if (a_conf->reload_conf_period != 0
-                        && a_conf->fsync_period >= a_conf->reload_conf_period) {
-                        zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
-                                "set fsync_period to zero");
-                        a_conf->fsync_period = 0;
-                    }
-
-                    a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
-                    if (!a_conf->rotater) {
-                        zc_error("zlog_rotater_new fail");
-                        return -1;
-                    }
-
-                    a_conf->default_format = zlog_format_new(a_conf->default_format_line,
-                                                             &(a_conf->time_cache_count));
-                    if (!a_conf->default_format) {
-                        zc_error("zlog_format_new fail");
-                        return -1;
-                    }
-                    default_rule_init=1;
-                }
-            }
-            else
-            {
-                section =-1;
-            }
-            switch(section)
-            {
-
-                case -1:
-                    break ;
-
-                case 1:
-
-                    memset(&line, 0x00, sizeof(line));
-
-
-                    pointer_node = nodeptr->u.object.values[ i ];
-
-                    for (int j =0 ; j < pointer_node->u.array.len ; j++) {
-
-                        object_node = pointer_node->u.array.values[j];
-
-                        if (!get_string_by_key(object_node, "key"))
-                            return -1;
-
-
-                        memcpy(line + strlen(line), xc, strlen(xc));
-
-                        memcpy(line + strlen(line), " = ", 3);
-
-
-                        //   xc = xmlGetProp(j,(xmlChar*) "value");
-                        if (!get_string_by_key(object_node, "value"))
-                            return -1;
-
-                        line[strlen(line)] = ' ';
-
-                        memcpy(line + strlen(line), xc, strlen(xc));
-
-
-                        for (int i = 0; i < strlen(line); i++)    // replace  inallowed characters.
-                            if (line[i] == '$')        //In phoenix (xml) %s is reserved
-                                line[i] = '%';
-
-
-
-                        //line = &output;
-
-                        if (section < 5 && section > 0)
-                            rc = zlog_conf_parse_line(a_conf, line, &section);
-
-                        if (rc < 0) {
-                            zc_error("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-                            zc_error("line[%s]", line);
-                            goto exit;
-                        } else if (rc > 0) {
-                            zc_warn("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-                            zc_warn("line[%s]", line);
-                            zc_warn("as strict init is set to false, ignore and go on");
-                            rc = 0;
-                            continue;
-                        }
-                    }
-                    break;
-
-
-                case 2:
-
-
-                    memset(&line, 0x00, sizeof(line));
-
-                    pointer_node = nodeptr->u.object.values[ i ];
-
-                    for (int j =0 ; j < pointer_node->u.array.len ; j++)
-                    {
-                        object_node =   pointer_node->u.array.values[j];
-
-
-                     xc = get_string_by_key(object_node, "level");
-                    if(!xc)
-                        return -1;
-
-                    memcpy(line+ strlen(line), xc, strlen(xc));
-
-                    memcpy(line+ strlen(line), " = ", 3);
-
-                    //  xc = xmlGetProp(j,(xmlChar*)"value");
-                        xc = get_string_by_key(object_node, "value");
-                        if(!xc)
-                            return -1;
-
-                        line[strlen(line)]=' ';
-
-                    memcpy(line+ strlen(line), xc, strlen(xc));
-
-
-                    for ( int i=0 ; i< strlen(line); i++)	// replace  inallowed characters.
-                        if(line[i]=='$')		//In phoenix (xml) %s is reserved
-                            line[i]='%';
-
-
-
-                    //line = &output;
-
-                    if(section<5 && section > 0)
-                        rc = zlog_conf_parse_line(a_conf, line, &section);
-
-                    if (rc < 0) {
-                        zc_error("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-                        zc_error("line[%s]", line);
-                        goto exit;
-                    } else if (rc > 0) {
-                        zc_warn("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-                        zc_warn("line[%s]", line);
-                        zc_warn("as strict init is set to false, ignore and go on");
-                        rc = 0;
-                        continue;
-                    }
-                    }
-                    break;
-
-                case 3:
-
-                    memset(&line, 0x00, sizeof(line));
-
-
-                    pointer_node = nodeptr->u.object.values[ i ];
-
-                    for (int j =0 ; j < pointer_node->u.array.len ; j++)
-                    {
-                        object_node  =   pointer_node->u.array.values[j];
-
-                     xc = get_string_by_key(object_node, "name");
-
-                     if(!xc)
-                           return -1;
-
-
-                    memcpy(line+ strlen(line), xc, strlen(xc));
-
-                    memcpy(line+ strlen(line), " = ", 3);
-
-                        xc = get_string_by_key(object_node, "pattern");
-                        if(!xc)
-                            return -1;
-
-
-                        char temp= ' ';
-
-                    if(xc[0] != '"')
-                        temp = '"';
-
-
-
-                    memcpy(line+ strlen(line), &temp, 1);
-
-                    memcpy(line+ strlen(line), xc, strlen(xc));
-
-                    memcpy(line+ strlen(line), &temp, 1);
-
-                    for ( int i=0 ; i< strlen(line); i++)	// replace  inallowed characters.
-                        if(line[i]=='$')		//In phoenix (xml) %s is reserved
-                            line[i]='%';
-
-
-
-                    //line = &output;
-
-                    if(section<5 && section > 0)
-                        rc = zlog_conf_parse_line(a_conf, line, &section);
-
-                    if (rc < 0) {
-                        zc_error("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-                        zc_error("line[%s]", line);
-                        goto exit;
-                    } else if (rc > 0) {
-                        zc_warn("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-                        zc_warn("line[%s]", line);
-                        zc_warn("as strict init is set to false, ignore and go on");
-                        rc = 0;
-                        continue;
-                    }
-                    }
-
-                    break;
-
-                case 4:
-
-                    memset(&line, 0x00, sizeof(line));
-
-
-                    pointer_node = nodeptr->u.object.values[ i ];
-
-                    for (int j =0 ; j < pointer_node->u.array.len ; j++)
-                    {
-                        object_node =   pointer_node->u.array.values[j];
-                    xc = get_string_by_key(object_node, "category");
-                    if(!xc)
-                        return -1;
-
-                    if ( def_rule_name && strcmp(xc, def_rule_name) == 0)
-                        def_rule_parsed = 1;
-
-                    memcpy(line+ strlen(line), xc, strlen(xc));
-
-                    line[strlen(line)]='.';
-
-                    //    xc = xmlGetProp(j,(xmlChar*)"level");
-                     xc = get_string_by_key(object_node, "level");
-                     if(!xc)
-                          return -1;
-
-                        memcpy(line+ strlen(line), xc, strlen(xc));
-
-                    line[strlen(line)]=' ';
-
-                        xc = get_string_by_key(object_node, "output");
-                        if(!xc)
-                            return -1;
-
-
-
-                        unsigned int i =0 , y = 0, z=0;
-                    if(xc[0]=='/' || (xc[0]=='.' && xc[1]=='/'))      //If not begining with double quotation then add them.
-                    {    line[strlen(line)]='"';
-
-                        for (i = 0; i < strlen((char *) xc) ; ++i) {            //And close the quotation here
-                            if(xc[i]==' ' || xc[i]==',' || i == strlen((char *) xc)-1) {
-
-                                memcpy(line + strlen(line), (char *) xc, i+1);
-                                line[strlen(line)]='"';
-                                y=i;
-                                break;
-
-                            }
-                        }
-                    }
-                    else
-                    {
-                        memcpy(line+ strlen(line), xc, strlen(xc));
-                        z = 1;
-                    }
-                    if(!z){
-                        int new_counter = 0;
-                        int i_2=0;
-                        for ( ; y < strlen((char*)xc) && i_2!=-1 ; ++y) {
-                            if ((xc[y] == '/' || (xc[y] == '.' && xc[y + 1] == '/')) && (xc[y - 1] != '"' && (y + 1 < strlen((char *) xc)) && xc[y + 1] !='"'))  //If not begining with double quotation then add them.
-                            {
-
-                                memcpy(line + strlen(line), (char *) xc + i, new_counter);
-
-                                line[strlen(line)] = '"';
-                                i_2 = y;
-                                for (; i_2 < strlen((char *) xc); ++i_2) {            //And close the quotation here
-                                    if (xc[i_2] == ' ' || xc[i] == ',' || ((i_2 == strlen((char *) xc) - 1) && xc[i_2]!='"')) {
-
-                                        memcpy(line + strlen(line), (char *) xc+y, i_2 + 1);
-
-                                        line[strlen(line)] = '"';
-                                        i_2=-1;
-                                        break;
-
-                                    }
-                                    y++;
-
-
-                                }
-                            }
-                            new_counter++;
-                        }
-                    }
-                    if(line[strlen(line)-1]!=';')
-                        line[strlen(line)]= ';';
-
-                        xc = get_string_by_key(object_node, "format");
-                        if(!xc)
-                            return -1;
-
-
-                        line[strlen(line)]=' ';
-
-                    memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
-
-
-                    for ( int i=0 ; i< strlen(line); i++)	// replace  inallowed characters.
-                        if(line[i]=='$')		//In phoenix (xml) %s is reserved
-                            line[i]='%';
-
-
-
-                    //line = &output;
-
-                    if(section<5 && section > 0)
-                        rc = zlog_conf_parse_line(a_conf, line, &section);
-
-                    if (rc < 0) {
-                        zc_error("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-                        zc_error("line[%s]", line);
-                        goto exit;
-                    } else if (rc > 0) {
-                        zc_warn("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
-                        zc_warn("line[%s]", line);
-                        zc_warn("as strict init is set to false, ignore and go on");
-                        rc = 0;
-                        continue;
-                    }
-                    }
-                    break;
-            }
-
-
-
-        }
-    }
-
-
-    section = 4;
-
-    if(!default_rule_init)      //Check again if default rule parsed
-    {
-
-        if (a_conf->reload_conf_period != 0
-            && a_conf->fsync_period >= a_conf->reload_conf_period) {
-            zc_warn("fsync_period[%ld] >= reload_conf_period[%ld],"
-                    "set fsync_period to zero");
-            a_conf->fsync_period = 0;
-        }
-
-        a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
-        if (!a_conf->rotater) {
-            zc_error("zlog_rotater_new fail");
-            return -1;
-        }
-
-        a_conf->default_format = zlog_format_new(a_conf->default_format_line,
-                                                 &(a_conf->time_cache_count));
-        if (!a_conf->default_format) {
-            zc_error("zlog_format_new fail");
-            return -1;
-        }
-        default_rule_init=1;
-
-    }
-
-    if(!def_rule_parsed)        //If default config not defined
-    {        zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
-    }
-    zlog_conf_parse_line(a_conf, ZLOG_CONF_STDOUT_RULE , &section); //stdout have to be always present.
-
-
+**/
 
     return rc;
 
@@ -1260,9 +1054,15 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
 }
 /********************************Phoenix extending functions***********************************************/
 
-zlog_conf_t *zlog_ph_conf(yajl_val conf_obj , char** path)
+zlog_conf_t *zlog_ph_conf(void* conf_obj , int xml_json, char** path)    //1 json, 0 xml
 {
+    xmlNodePtr xml_conf = 0;
+    yajl_val json_conf = 0;
 
+    if(xml_json)
+        xml_conf = *(xmlNodePtr*)conf_obj;
+    else
+        json_conf = *(yajl_val*) conf_obj;
 
     int has_conf_file = 0;
     zlog_conf_t *a_conf = NULL;
@@ -1312,79 +1112,19 @@ zlog_conf_t *zlog_ph_conf(yajl_val conf_obj , char** path)
         zc_error("init rule_list fail");
         goto err;
     }
-
-        if (zlog_ph_conf_build_with_json(a_conf, conf_obj, path)) {
-            zc_error("zlog_conf_build_without_file fail");
-            goto err;
-        }
-
-
-    zlog_conf_profile(a_conf, ZC_DEBUG);
-    return a_conf;
-    err:
-    zlog_conf_del(a_conf);
-    return NULL;
-}
-
-zlog_conf_t *zlog_ph_conf_xml(xmlNodePtr xml_conf )    //1 json, 0 xml
-{
-    //xmlNodePtr xml_conf = 0;
-   // xml_conf = *(xmlNodePtr*)conf_obj;
-
-
-    int has_conf_file = 0;
-    zlog_conf_t *a_conf = NULL;
-
-    a_conf = calloc(1, sizeof(zlog_conf_t));
-    if (!a_conf) {
-        zc_error("calloc fail, errno[%d]", errno);
-        return NULL;
-    }
-
-
-    memset(a_conf->file, 0x00, sizeof(a_conf->file));
-    has_conf_file = 0;
-
-
-
-    /* set default configuration start */
-    a_conf->strict_init = 1;
-    a_conf->buf_size_min = ZLOG_CONF_DEFAULT_BUF_SIZE_MIN;
-    a_conf->buf_size_max = ZLOG_CONF_DEFAULT_BUF_SIZE_MAX;
-    if (has_conf_file) {
-        /* configure file as default lock file */
-        strcpy(a_conf->rotate_lock_file, a_conf->file);
-    } else {
-        strcpy(a_conf->rotate_lock_file, ZLOG_CONF_BACKUP_ROTATE_LOCK_FILE);
-    }
-    strcpy(a_conf->default_format_line, ZLOG_CONF_DEFAULT_FORMAT);
-    a_conf->file_perms = ZLOG_CONF_DEFAULT_FILE_PERMS;
-    a_conf->reload_conf_period = ZLOG_CONF_DEFAULT_RELOAD_CONF_PERIOD;
-    a_conf->fsync_period = ZLOG_CONF_DEFAULT_FSYNC_PERIOD;
-    /* set default configuration end */
-
-    a_conf->levels = zlog_level_list_new();
-    if (!a_conf->levels) {
-        zc_error("zlog_level_list_new fail");
+    if(xml_json){
+        if (zlog_ph_conf_build_with_json(a_conf, json_conf, path)) {
+        zc_error("zlog_conf_build_without_file fail");
         goto err;
     }
-
-    a_conf->formats = zc_arraylist_new((zc_arraylist_del_fn) zlog_format_del);
-    if (!a_conf->formats) {
-        zc_error("zc_arraylist_new fail");
-        goto err;
     }
-
-    a_conf->rules = zc_arraylist_new((zc_arraylist_del_fn) zlog_rule_del);
-    if (!a_conf->rules) {
-        zc_error("init rule_list fail");
-        goto err;
-    }
-
+    else
+    {
         if (zlog_ph_conf_build_with_xml(a_conf, xml_conf)) {
             zc_error("zlog_conf_build_without_file fail");
             goto err;
         }
+    }
 
 
     zlog_conf_profile(a_conf, ZC_DEBUG);

@@ -1208,15 +1208,21 @@ int zlog_reload_with_obj(void* config)
 		}
 		return 0;
 }
-void* zlog_get_obj(xmlNodePtr xml_ptr){
 
-	zlog_conf_t* a_conf = zlog_ph_conf(xml_ptr);		//create object, parse xml. return conf object.
+void* zlog_get_obj(yajl_val ptr, char** path){
+
+    zlog_conf_t* a_conf = zlog_ph_conf(ptr, path);		//create object, parse xml. return conf object. 1 for json
+    return (void*) a_conf;
+}
+void* zlog_get_obj_xml(xmlNodePtr xml_ptr){
+
+	zlog_conf_t* a_conf = zlog_ph_conf_xml(xml_ptr);		//create object, parse xml. return conf object. 1 for json
 	return (void*) a_conf;
 }
 int zlog_feed_xml(void* xml_cfg){
-
-zlog_conf_t* a_conf = zlog_ph_conf(xml_cfg);		//create object, parse xml. return conf object.
+/*
+zlog_conf_t* a_conf = zlog_ph_conf(xml_cfg, 0, 0);		//create object, parse xml. return conf object.
 int i = zlog_reload_with_obj((void*) a_conf);	//reload zlog with object a_conf
-
-		return i ;
+*/
+		return 0 ;
 }
