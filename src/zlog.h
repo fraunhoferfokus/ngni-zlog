@@ -32,7 +32,7 @@ int zlog_reload(const char *confpath);
 #define PH_DEFAULT
 #endif
 
-int zlog_feed_xml(xmlNodePtr xml_cfg);		//This supposed to do all the job from start to end. Parse XML, create object, reload with created obj.
+int zlog_feed_xml(xmlNodePtr xml_cfg);
 void* zlog_get_obj(yajl_val ptr, char** path);
 void* zlog_get_obj_xml(xmlNodePtr xml_ptr);
 

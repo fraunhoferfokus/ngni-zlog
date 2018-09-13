@@ -813,7 +813,7 @@ int zlog_ph_conf_build_with_json(zlog_conf_t * a_conf, yajl_val nodeptr, char** 
 
                         object_node =   pointer_node->u.array.values[j];
 
-                    xc = get_string_by_key(object_node, "category");
+                        xc = get_string_by_key(object_node, "category");
                     if(!xc)
                         return -1;
 
@@ -1104,7 +1104,7 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
     if (strlen(line) > MAXLEN_CFG_LINE) {
         zc_error ("line_len[%ld] > MAXLEN_CFG_LINE[%ld], may cause overflow",
                   strlen(line), MAXLEN_CFG_LINE);
-        return -1;
+        goto error;
     }
 
     /* get and set outer section flag, so it is a closure? haha */
@@ -1127,7 +1127,7 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
         /* check the sequence of section, must increase */
         if (last_section >= *section) {
             zc_error("wrong sequence of section, must follow global->levels->formats->rules");
-            return -1;
+            goto error;
         }
 
         if (*section == 4) {
@@ -1150,14 +1150,14 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
             a_conf->rotater = zlog_rotater_new(a_conf->rotate_lock_file);
             if (!a_conf->rotater) {
                 zc_error("zlog_rotater_new fail");
-                return -1;
+                goto error;
             }
 
             a_conf->default_format = zlog_format_new(a_conf->default_format_line,
                                                      &(a_conf->time_cache_count));
             if (!a_conf->default_format) {
                 zc_error("zlog_format_new fail");
-                return -1;
+                goto error;
             }
         }
         return 0;
@@ -1171,7 +1171,7 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
             nscan = sscanf(line, " %[^=]= %s ", name, value);
             if (nscan != 2) {
                 zc_error("sscanf [%s] fail, name or value is null", line);
-                return -1;
+                goto error;
             }
 
             memset(word_1, 0x00, sizeof(word_1));
@@ -1213,26 +1213,27 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
                 a_conf->fsync_period = zc_parse_byte_size(value);
             } else {
                 zc_error("name[%s] is not any one of global options", name);
-                if (a_conf->strict_init) return -1;
+                if (a_conf->strict_init)  goto error;
             }
             break;
         case 2:
             if (zlog_level_list_set(a_conf->levels, line)) {
                 zc_error("zlog_level_list_set fail");
-                if (a_conf->strict_init) return -1;
+                if (a_conf->strict_init)  goto error;
             }
             break;
         case 3:
             a_format = zlog_format_new(line, &(a_conf->time_cache_count));
             if (!a_format) {
                 zc_error("zlog_format_new fail [%s]", line);
-                if (a_conf->strict_init) return -1;
+                if (a_conf->strict_init) goto error;
                 else break;
             }
             if (zc_arraylist_add(a_conf->formats, a_format)) {
                 zlog_format_del(a_format);
                 zc_error("zc_arraylist_add fail");
-                return -1;
+                goto error;
+
             }
             break;
         case 4:
@@ -1246,22 +1247,27 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
 
             if (!a_rule) {
                 zc_error("zlog_rule_new fail [%s]", line);
-                if (a_conf->strict_init) return -1;
+                if (a_conf->strict_init)             goto error;
+
                 else break;
             }
             if (zc_arraylist_add(a_conf->rules, a_rule)) {
                 zlog_rule_del(a_rule);
                 zc_error("zc_arraylist_add fail");
-                return -1;
+                goto error;
             }
             break;
         default:
             zc_error("not in any section");
-            return -1;
-            break;
+            goto error;
+
     }
 
     return 0;
+
+error:
+    zc_error ("error with line %s\n",line);
+    return -1;
 }
 /********************************Phoenix extending functions***********************************************/
 
