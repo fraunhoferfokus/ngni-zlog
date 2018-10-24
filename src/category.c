@@ -53,7 +53,11 @@ static void zlog_cateogry_overlap_bitmap(zlog_category_t * a_category, zlog_rule
 		a_category->level_bitmap[i] |= a_rule->level_bitmap[i];
 	}
 }
+int zlog_rule_exist(char* name)
+{
 
+	return 0;
+}
 static int zlog_category_obtain_rules(zlog_category_t * a_category, zc_arraylist_t * rules)
 {
 	int i;

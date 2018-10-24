@@ -28,8 +28,9 @@
 #ifndef CONSTANTS_DEFAULT
 #define CONSTANTS_DEFAULT
 #define ZLOG_CONF_DEFAULT_FORMAT "ph_default_format = \"%M(carriage)%T/%M(sysid)(%p) %d(%T) %x %M(levelid):%M(log_block):%M(function)():%M(lineno)> %m\""
-#define ZLOG_CONF_DEFAULT_RULE "ph_default_category.*        >stdout"   //Default rule is for all the log_blocks
-#define ZLOG_CONF_STDOUT_RULE "stdout_category.*         >stdout"    //stdout for all modules need to only output to stdout. like prompt function
+#define ZLOG_CONF_DEFAULT_RULE "ph_default_category.*        >stdout"   //<Default rule is for all the log_blocks
+#define ZLOG_CONF_STDOUT_RULE "stdout_category.*         >stdout"    //<stdout for all modules need to only output to stdout. like prompt function
+#define ZLOG_CONF_COMMAND_RULE "command.*        >stdout"   //< for "command" logblock
 
 #define ZLOG_CONF_DEFAULT_BUF_SIZE_MIN 1024
 #define ZLOG_CONF_DEFAULT_BUF_SIZE_MAX (2 * 1024 * 1024)
@@ -231,12 +232,16 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
     int section = 0;
 
-    char str[] = ZLOG_CONF_DEFAULT_RULE;  //To check if default rule defined by user.
-    const char deli[] = ".";
-    char *def_rule_name;
-    def_rule_name = strtok(str, deli);
+    char str_temp[] = ZLOG_CONF_DEFAULT_RULE;  //To check if default rule defined by user.
+    char str_temp2[] = ZLOG_CONF_COMMAND_RULE;
 
-    int def_rule_parsed = 0;
+    const char deli[] = ".";
+    char *def_rule_name, *command_rule_name;
+
+    def_rule_name = strtok(str_temp, deli);
+    command_rule_name = strtok(str_temp2, deli);
+
+    int def_rule_parsed = 0, command_rule_parsed = 0;
 
     section = 3;						//Parse default format
 
@@ -348,6 +353,9 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
                     if ( def_rule_name && strcmp((char*)xc, def_rule_name) == 0)
                         def_rule_parsed = 1;
+
+                    if ( command_rule_name && strcmp((char*)xc, command_rule_name) == 0)
+                        command_rule_parsed = 1;
 
                     memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
 
@@ -477,8 +485,11 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
     }
 
-    if(!def_rule_parsed)        //If default config not defined
+    if(!def_rule_parsed)        //<If default config not defined
     {        zlog_conf_parse_line(a_conf, ZLOG_CONF_DEFAULT_RULE, &section);
+    }
+    if(!command_rule_parsed)        //<If command rule not defined
+    {        zlog_conf_parse_line(a_conf, ZLOG_CONF_COMMAND_RULE, &section);
     }
     zlog_conf_parse_line(a_conf, ZLOG_CONF_STDOUT_RULE , &section); //stdout have to be always present.
 
