@@ -33,10 +33,8 @@ ZLOG_MINOR=2
 
 # Fallback to gcc when $CC is not in $PATH.
 CC:=$(shell sh -c 'type $(CC) >/dev/null 2>/dev/null && echo $(CC) || echo gcc')
-#OPTIMIZATION?=-O2
 WARNINGS=-Wall -Wstrict-prototypes -fwrapv
-#DEBUG?= -g -ggdb
-REAL_CFLAGS=$(OPTIMIZATION) -fPIC -pthread  $(CFLAGS) $(WARNINGS) $(DEBUG) `xml2-config --cflags` 
+REAL_CFLAGS=$(OPTIMIZATION) -fPIC -pthread  $(CFLAGS) $(WARNINGS) $(DEBUG) `xml2-config --cflags`
 REAL_LDFLAGS=$(LDFLAGS) -pthread `xml2-config --libs` -lyajl
 BS=$(shell pkg-config --libs libxml-2.0)
 
