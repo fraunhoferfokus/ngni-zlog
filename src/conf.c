@@ -292,12 +292,19 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 				case 1:
 
 					xc = xmlGetProp(j,(xmlChar*) "key");
-
+					if(!xc) {
+						zc_error("zlog_global_new fail. Key not found, please check configuration.");
+						return -1;
+					}
 					memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
 
 					memcpy(line+ strlen(line), " = ", 3);
 
 					xc = xmlGetProp(j,(xmlChar*) "value");
+					if(!xc) {
+						zc_error("zlog_global_new fail. Value not found, please check configuration.");
+						return -1;
+					}
 
 					line[strlen(line)]=' ';
 
@@ -310,35 +317,46 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 				case 2:
 
 					xc = xmlGetProp(j,(xmlChar*)"level");
-
+					if(!xc) {
+						zc_error("zlog_level_new fail. Level not found, please check configuration.");
+						return -1;
+					}
 					memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
 
 					memcpy(line+ strlen(line), " = ", 3);
 
 					xc = xmlGetProp(j,(xmlChar*)"value");
-
+					if(!xc) {
+						zc_error("zlog_level_new fail. Value not found, please check configuration.");
+						return -1;
+					}
 					line[strlen(line)]=' ';
 
 					memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
-
-
 
 					break;
 				case 3:
 
 					xc = xmlGetProp(j,(xmlChar*)"name");
+					if(!xc) {
+						zc_error("zlog_format_new fail. Name not found, please check configuration.");
+						return -1;
+					}
 
 					memcpy(line+ strlen(line), (char*) xc, strlen((char*) xc));
 
 					memcpy(line+ strlen(line), " = ", 3);
 
 					xc = xmlGetProp(j,(xmlChar*)"pattern");
+					if(!xc) {
+						zc_error("zlog_format_new fail. pattern not found, please check configuration.");
+						return -1;
+					}
 
 					char temp= ' ';
 
 					if(xc[0] != '"')
 						temp = '"';
-
 
 					memcpy(line+ strlen(line), &temp, 1);
 
@@ -350,6 +368,10 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 
 				case 4:
 					xc = xmlGetProp(j,(xmlChar*)"category");
+					if(!xc) {
+						zc_error("zlog_rule_new fail. Category not found, please check configuration.");
+						return -1;
+					}
 
 					if ( def_rule_name && strcmp((char*)xc, def_rule_name) == 0)
 						def_rule_parsed = 1;
@@ -362,12 +384,19 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 					line[strlen(line)]='.';
 
 					xc = xmlGetProp(j,(xmlChar*)"level");
-
+					if(!xc) {
+						zc_error("zlog_rule_new fail. Level not found, please check configuration.");
+						return -1;
+					}
 					memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
 
 					line[strlen(line)]=' ';
 
 					xc = xmlGetProp(j,(xmlChar*)"output");
+					if(!xc) {
+						zc_error("zlog_rule_new fail. Output not found, please check configuration.");
+						return -1;
+					}
 
 					unsigned int i =0 , y = 0, z=0;
 					if(xc[0]=='/' || (xc[0]=='.' && xc[1]=='/'))      //If not begining with double quotation then add them.
@@ -422,7 +451,10 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 						line[strlen(line)]= ';';
 
 					xc = xmlGetProp(j,(xmlChar*)"format");
-
+					if(!xc) {
+						zc_error("zlog_rule_new fail. Format not found, please check configuration.");
+						return -1;
+					}
 					line[strlen(line)]=' ';
 
 					memcpy(line + strlen(line), (char*) xc, strlen((char*) xc));
@@ -492,8 +524,6 @@ int zlog_ph_conf_build_with_xml(zlog_conf_t * a_conf, xmlNodePtr xml_conf )
 	{        zlog_conf_parse_line(a_conf, ZLOG_CONF_COMMAND_RULE, &section);
 	}
 	zlog_conf_parse_line(a_conf, ZLOG_CONF_STDOUT_RULE , &section); //stdout have to be always present.
-
-
 
 	return rc;
 
