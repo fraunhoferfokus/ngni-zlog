@@ -14,8 +14,10 @@
 #include "rotater.h"
 
 typedef struct zlog_conf_s {
-	char file[MAXLEN_PATH + 1];
+	char cfg_file[MAXLEN_PATH + 1];
 	char mtime[20 + 1];
+
+	char cfg_array[MAXLEN_CFG_LINE*MAXLINES_NO];
 
 	int strict_init;
 	size_t buf_size_min;
