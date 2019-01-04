@@ -24,8 +24,9 @@ extern "C" {
 
 typedef struct zlog_category_s zlog_category_t;
 
-int zlog_init(const char *confpath);
-int zlog_reload(const char *confpath);
+/* conf variable can be either a configuration string, or configuration file path. */
+int zlog_init(const char *conf);
+int zlog_reload(const char *conf);
 void zlog_fini(void);
 
 void zlog_profile(void);
