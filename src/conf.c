@@ -44,7 +44,8 @@ void zlog_conf_profile(zlog_conf_t * a_conf, int flag)
 	zc_assert(a_conf,);
 	zc_profile(flag, "-conf[%p]-", a_conf);
 	zc_profile(flag, "--global--");
-	zc_profile(flag, "---file[%s],mtime[%s]---", a_conf->file, a_conf->mtime);
+	zc_profile(flag, "---file[%s],mtime[%s]---", a_conf->cfg_file, a_conf->mtime);
+	zc_profile(flag, "---in-memory cfg[%s]---", a_conf->cfg_array);
 	zc_profile(flag, "---strict init[%d]---", a_conf->strict_init);
 	zc_profile(flag, "---buffer min[%ld]---", a_conf->buf_size_min);
 	zc_profile(flag, "---buffer max[%ld]---", a_conf->buf_size_max);
@@ -91,13 +92,18 @@ void zlog_conf_del(zlog_conf_t * a_conf)
 	return;
 }
 
-static int zlog_conf_build_without_file(zlog_conf_t * a_conf);
-static int zlog_conf_build_with_file(zlog_conf_t * a_conf);
+static int zlog_conf_build_with_static_config(zlog_conf_t * a_conf);
+static int zlog_conf_build_with_file_config(zlog_conf_t * a_conf);
+static int zlog_conf_build_with_in_memory_config(zlog_conf_t * a_conf);
 
-zlog_conf_t *zlog_conf_new(const char *confpath)
+#define STATIC_CFG 0
+#define FILE_CFG 1
+#define IN_MEMORY_CFG 2
+
+zlog_conf_t *zlog_conf_new(const char *config)
 {
 	int nwrite = 0;
-	int has_conf_file = 0;
+	int cfg_source = 0;
 	zlog_conf_t *a_conf = NULL;
 
 	a_conf = calloc(1, sizeof(zlog_conf_t));
@@ -105,18 +111,24 @@ zlog_conf_t *zlog_conf_new(const char *confpath)
 		zc_error("calloc fail, errno[%d]", errno);
 		return NULL;
 	}
+	//If starts with '[' then in memory cfg, else its a path.
+	if (config && config[0] != '\0' && config[0] != '[') {  //ToDo is this a good way to tell we have config in memory? (confpath is used as a path if exist, otherwise as config string if.
+		nwrite = snprintf(a_conf->cfg_file, sizeof(a_conf->cfg_file), "%s", config);
+		cfg_source = FILE_CFG;
+	} else if (config[0]=='[')   //ToDo is this a good whay to tell that we have config in memory?
+	{
+		memset(a_conf->cfg_file, 0x00, sizeof(a_conf->cfg_file));
+		nwrite = snprintf(a_conf->cfg_array, sizeof(a_conf->cfg_array), "%s", config);
+		cfg_source = IN_MEMORY_CFG;
 
-	if (confpath && confpath[0] != '\0') {
-		nwrite = snprintf(a_conf->file, sizeof(a_conf->file), "%s", confpath);
-		has_conf_file = 1;
 	} else if (getenv("ZLOG_CONF_PATH") != NULL) {
-		nwrite = snprintf(a_conf->file, sizeof(a_conf->file), "%s", getenv("ZLOG_CONF_PATH"));
-		has_conf_file = 1;
+		nwrite = snprintf(a_conf->cfg_file, sizeof(a_conf->cfg_file), "%s", getenv("ZLOG_CONF_PATH"));
+		cfg_source = FILE_CFG;
 	} else {
-		memset(a_conf->file, 0x00, sizeof(a_conf->file));
-		has_conf_file = 0;
+		memset(a_conf->cfg_file, 0x00, sizeof(a_conf->cfg_file));
+		cfg_source = STATIC_CFG;
 	}
-	if (nwrite < 0 || nwrite >= sizeof(a_conf->file)) {
+	if (nwrite < 0 || nwrite >= sizeof(a_conf->cfg_file)) {
 		zc_error("not enough space for path name, nwrite=[%d], errno[%d]", nwrite, errno);
 		goto err;
 	}
@@ -125,9 +137,9 @@ zlog_conf_t *zlog_conf_new(const char *confpath)
 	a_conf->strict_init = 1;
 	a_conf->buf_size_min = ZLOG_CONF_DEFAULT_BUF_SIZE_MIN;
 	a_conf->buf_size_max = ZLOG_CONF_DEFAULT_BUF_SIZE_MAX;
-	if (has_conf_file) {
+	if (cfg_source == FILE_CFG) {
 		/* configure file as default lock file */
-		strcpy(a_conf->rotate_lock_file, a_conf->file);
+		strcpy(a_conf->rotate_lock_file, a_conf->cfg_file);
 	} else {
 		strcpy(a_conf->rotate_lock_file, ZLOG_CONF_BACKUP_ROTATE_LOCK_FILE);
 	}
@@ -155,13 +167,18 @@ zlog_conf_t *zlog_conf_new(const char *confpath)
 		goto err;
 	}
 
-	if (has_conf_file) {
-		if (zlog_conf_build_with_file(a_conf)) {
+	if (cfg_source == FILE_CFG) {
+		if (zlog_conf_build_with_file_config(a_conf)) {
 			zc_error("zlog_conf_build_with_file fail");
 			goto err;
 		}
+	} else if (cfg_source == IN_MEMORY_CFG) {
+		if(zlog_conf_build_with_in_memory_config(a_conf)){
+		zc_error("zlog_conf_build_with_string fail");
+		goto err;
+		}
 	} else {
-		if (zlog_conf_build_without_file(a_conf)) {
+		if (zlog_conf_build_with_static_config(a_conf)) {
 			zc_error("zlog_conf_build_without_file fail");
 			goto err;
 		}
@@ -174,7 +191,7 @@ err:
 	return NULL;
 }
 /*******************************************************************************/
-static int zlog_conf_build_without_file(zlog_conf_t * a_conf)
+static int zlog_conf_build_with_static_config(zlog_conf_t * a_conf)
 {
 	zlog_rule_t *default_rule;
 
@@ -215,7 +232,7 @@ static int zlog_conf_build_without_file(zlog_conf_t * a_conf)
 /*******************************************************************************/
 static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section);
 
-static int zlog_conf_build_with_file(zlog_conf_t * a_conf)
+static int zlog_conf_build_with_file_config(zlog_conf_t * a_conf)
 {
 	int rc = 0;
 	struct zlog_stat a_stat;
@@ -233,16 +250,16 @@ static int zlog_conf_build_with_file(zlog_conf_t * a_conf)
 	int section = 0;
 	/* [global:1] [levels:2] [formats:3] [rules:4] */
 
-	if (lstat(a_conf->file, &a_stat)) {
-		zc_error("lstat conf file[%s] fail, errno[%d]", a_conf->file,
+	if (lstat(a_conf->cfg_file, &a_stat)) {
+		zc_error("lstat conf file[%s] fail, errno[%d]", a_conf->cfg_file,
 			 errno);
 		return -1;
 	}
 	localtime_r(&(a_stat.st_mtime), &local_time);
 	strftime(a_conf->mtime, sizeof(a_conf->mtime), "%F %T", &local_time);
 
-	if ((fp = fopen(a_conf->file, "r")) == NULL) {
-		zc_error("open configure file[%s] fail", a_conf->file);
+	if ((fp = fopen(a_conf->cfg_file, "r")) == NULL) {
+		zc_error("open configure file[%s] fail", a_conf->cfg_file);
 		return -1;
 	}
 
@@ -311,11 +328,11 @@ static int zlog_conf_build_with_file(zlog_conf_t * a_conf)
 		 */
 		rc = zlog_conf_parse_line(a_conf, line, &section);
 		if (rc < 0) {
-			zc_error("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
+			zc_error("parse configure file[%s]line_no[%ld] fail", a_conf->cfg_file, line_no);
 			zc_error("line[%s]", line);
 			goto exit;
 		} else if (rc > 0) {
-			zc_warn("parse configure file[%s]line_no[%ld] fail", a_conf->file, line_no);
+			zc_warn("parse configure file[%s]line_no[%ld] fail", a_conf->cfg_file, line_no);
 			zc_warn("line[%s]", line);
 			zc_warn("as strict init is set to false, ignore and go on");
 			rc = 0;
@@ -327,7 +344,48 @@ exit:
 	fclose(fp);
 	return rc;
 }
+/**********************************************************************/
+static int zlog_conf_build_with_in_memory_config(zlog_conf_t * a_conf)
+{
+	int rc = 0;
 
+//	struct zlog_stat a_stat;    //ToDo find if these are necessary.
+//	struct tm local_time;
+//	FILE *fp = NULL;
+
+	char line[MAXLEN_CFG_LINE + 1];
+	size_t line_len;
+	char *pline = NULL;
+	char *p = NULL;
+	int line_no = 0;
+//	int i = 0;
+//	int in_quotation = 0;
+
+	int section = 0;
+
+	pline = line;   //ToDo if line charachters exceeds.
+	memset(&line, 0x00, sizeof(line));
+
+	pline = strtok((char *)a_conf->cfg_array, "\n");
+
+	while (pline != NULL) {
+
+		rc = zlog_conf_parse_line(a_conf, pline, &section);
+		if (rc < 0) {
+			zc_error("parse in-memory configurations[%s] line [%s] fail", a_conf->cfg_array, pline);
+			goto exit;
+		} else if (rc > 0) {
+			zc_error("parse in-memory configurations[%s] line [%s] fail", a_conf->cfg_array, pline);
+			zc_warn("as strict init is set to false, ignore and go on");
+			rc = 0;
+			continue;
+		}
+		pline = strtok(NULL, "\n");
+	}
+
+	exit:
+	return rc;
+}
 /* section [global:1] [levels:2] [formats:3] [rules:4] */
 static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
 {
@@ -438,7 +496,7 @@ static int zlog_conf_parse_line(zlog_conf_t * a_conf, char *line, int *section)
 				STRCMP(word_2, ==, "lock") && STRCMP(word_3, ==, "file")) {
 			/* may overwrite the inner default value, or last value */
 			if (STRCMP(value, ==, "self")) {
-				strcpy(a_conf->rotate_lock_file, a_conf->file);
+				strcpy(a_conf->rotate_lock_file, a_conf->cfg_file);
 			} else {
 				strcpy(a_conf->rotate_lock_file, value);
 			}
