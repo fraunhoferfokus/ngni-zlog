@@ -25,7 +25,7 @@
 #include "zc_defs.h"
 
 /*******************************************************************************/
-#define ZLOG_CONF_DEFAULT_FORMAT "default = \"%D %V [%p:%F:%L] %m%n\""
+#define ZLOG_CONF_DEFAULT_FORMAT "default = \"%M(carriage)%T/%M(sys_id)(%p)%d(%T)%M(colour) %M(level_id):%M(log_block):%M(function)():%M(line_no)> %m%M(reset_colour)\""
 #define ZLOG_CONF_DEFAULT_RULE "*.*        >stdout"
 #define ZLOG_CONF_DEFAULT_BUF_SIZE_MIN 1024
 #define ZLOG_CONF_DEFAULT_BUF_SIZE_MAX (2 * 1024 * 1024)
@@ -111,11 +111,11 @@ zlog_conf_t *zlog_conf_new(const char *config)
 		zc_error("calloc fail, errno[%d]", errno);
 		return NULL;
 	}
-	//If starts with '[' then in memory cfg, else its a path.
-	if (config && config[0] != '\0' && config[0] != '[') {  //ToDo is this a good way to tell we have config in memory? (confpath is used as a path if exist, otherwise as config string if.
+	//If starts with '[' then in memory cfg, else if not empty its a path, else read static config.
+	if (config && config[0] != '\0' && config[0] != '[') {
 		nwrite = snprintf(a_conf->cfg_file, sizeof(a_conf->cfg_file), "%s", config);
 		cfg_source = FILE_CFG;
-	} else if (config[0]=='[')   //ToDo is this a good whay to tell that we have config in memory?
+	} else if (config[0]=='[')
 	{
 		memset(a_conf->cfg_file, 0x00, sizeof(a_conf->cfg_file));
 		nwrite = snprintf(a_conf->cfg_array, sizeof(a_conf->cfg_array), "%s", config);
@@ -349,24 +349,15 @@ static int zlog_conf_build_with_in_memory_config(zlog_conf_t * a_conf)
 {
 	int rc = 0;
 
-//	struct zlog_stat a_stat;    //ToDo find if these are necessary.
-//	struct tm local_time;
-//	FILE *fp = NULL;
-
 	char line[MAXLEN_CFG_LINE + 1];
-	size_t line_len;
 	char *pline = NULL;
-	char *p = NULL;
-	int line_no = 0;
-//	int i = 0;
-//	int in_quotation = 0;
-
 	int section = 0;
 
-	pline = line;   //ToDo if line charachters exceeds.
+	pline = line;
 	memset(&line, 0x00, sizeof(line));
 
 	pline = strtok((char *)a_conf->cfg_array, "\n");
+
 
 	while (pline != NULL) {
 
