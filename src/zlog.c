@@ -207,7 +207,6 @@ err:
 	}
 	return -1;
 }
-//ToDo test if reloading with file still is working.
 /*******************************************************************************/
 int zlog_reload(const char *config)
 {
